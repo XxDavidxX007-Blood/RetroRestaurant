@@ -1,0 +1,114 @@
+# Editar Perfil — Retro Restaurant
+
+## ¿Qué hace?
+
+Permite a cualquier usuario (admin, empleado o cliente) actualizar su nombre, apellidos, teléfono, foto y contraseña. El email no se puede cambiar.
+
+---
+
+## Los archivos que participan
+
+```
+views/dashboard/perfil.php       →  vista: muestra el formulario y llama al controlador
+Controllers/PerfilController.php →  procesa el POST, valida y guarda
+models/usuario.php               →  ejecuta el UPDATE en la BD (método actualizarPerfil)
+img/perfiles/                    →  carpeta donde se guardan las fotos de perfil
+```
+
+---
+
+## El flujo, de principio a fin
+
+```
+1. Usuario hace clic en su avatar/nombre en el header → va a perfil.php
+2. perfil.php carga → llama a PerfilController::manejarPeticion()
+3. Si la petición es GET → solo muestra el formulario con los datos actuales
+4. Usuario edita lo que quiere y hace clic en "Guardar cambios"
+5. El formulario envía POST a perfil.php (misma página)
+6. El controlador valida los datos
+7. Si hay foto nueva → la valida, la guarda en img/perfiles/ y borra la anterior
+8. Llama a Usuario::actualizarPerfil() → UPDATE en BD
+9. Actualiza $_SESSION con los nuevos datos (para que el header se actualice al instante)
+10. Redirige a perfil.php con mensaje de éxito o error
+```
+
+---
+
+## Campos del formulario
+
+| Campo | Editable | Detalle |
+|---|---|---|
+| Nombre | Sí | Obligatorio |
+| Apellidos | Sí | Obligatorio |
+| Correo | **No** | Solo lectura, no se envía |
+| Teléfono | Sí | Opcional |
+| Foto | Sí | JPG, PNG, WEBP, GIF · máx 2MB |
+| Nueva contraseña | Opcional | Si se deja vacío, no cambia |
+| Confirmar contraseña | Opcional | Solo requerido si se escribe contraseña |
+
+---
+
+## Validaciones
+
+| # | ¿Qué revisa? | Si falla... |
+|---|---|---|
+| 1 | Nombre y apellidos no vacíos | "Nombre y apellidos son obligatorios" |
+| 2 | Si hay contraseña: mínimo 6 caracteres | "La contraseña debe tener al menos 6 caracteres" |
+| 3 | Si hay contraseña: que coincidan | "Las contraseñas no coinciden" |
+| 4 | Si hay foto: extensión permitida | "Formato de imagen no permitido" |
+| 5 | Si hay foto: tamaño máximo 2MB | "La imagen no puede superar 2 MB" |
+
+---
+
+## ¿Cómo se maneja la foto?
+
+```php
+// 1. Genera un nombre único para evitar colisiones
+$nombreArchivo = 'user_' . $id . '_' . time() . '.' . $ext;
+// Ejemplo: user_18_1778351681.jpg
+
+// 2. Mueve el archivo temporal al destino final
+move_uploaded_file($file['tmp_name'], 'img/perfiles/' . $nombreArchivo);
+
+// 3. Borra la foto anterior si existía
+if (!empty($actual['foto'])) {
+    @unlink('img/perfiles/' . $actual['foto']);
+}
+```
+
+La foto se previsualiza en el navegador antes de guardar usando `FileReader` en JavaScript, sin hacer ninguna petición al servidor.
+
+---
+
+## ¿Cómo se actualiza la sesión al instante?
+
+Después de guardar en BD, el controlador actualiza `$_SESSION` directamente para que el nombre y la foto en el header cambien sin necesidad de cerrar sesión:
+
+```php
+$_SESSION['usuario']['nombre']    = $nombre;
+$_SESSION['usuario']['apellidos'] = $apellidos;
+$_SESSION['usuario']['telefono']  = $telefono;
+if ($fotoPath) $_SESSION['usuario']['foto'] = $fotoPath;
+```
+
+---
+
+## ¿Cómo se muestran los mensajes?
+
+Usa dos claves de sesión distintas (no el sistema de `alert` del resto de la app):
+
+```php
+$_SESSION['perfil_ok']    = 'Perfil actualizado correctamente.';  // éxito
+$_SESSION['perfil_error'] = 'Mensaje de error';                   // fallo
+```
+
+La vista los lee, los muestra como banners de color y los borra con `unset()`.
+
+---
+
+## Cosas a tener en cuenta
+
+- **La foto anterior se borra automáticamente** al subir una nueva. Si el `unlink` falla (permisos), usa `@unlink` para que el error sea silencioso y no rompa el flujo.
+- **El email nunca se puede cambiar** desde esta vista ni desde ninguna otra. Está hardcodeado como campo deshabilitado.
+- **La contraseña es completamente opcional** — si ambos campos se dejan vacíos, el modelo detecta que `$datos['password']` está vacío y no lo incluye en el `UPDATE`.
+- **Cualquier rol puede editar su perfil** — no hay restricción de rol en este controlador.

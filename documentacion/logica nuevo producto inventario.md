@@ -1,0 +1,149 @@
+# Nuevo Producto — Gestión de Inventario
+
+## ¿Qué hace?
+
+Agrega un producto nuevo al inventario del restaurante. Al guardarlo se crean dos registros en la BD: uno en `producto` y otro en `inventario` (con el stock inicial).
+
+---
+
+## Los archivos que participan
+
+```
+views/dashboard/admin_gestion_de_inventario.php  →  botón + modal con el formulario
+Controllers/InventarioController.php             →  recibe el POST y llama al modelo
+models/Inventario.php                            →  ejecuta los INSERT en la BD
+```
+
+---
+
+## ¿Cómo se abre el formulario?
+
+No es una página aparte — es un modal que aparece encima del inventario. El botón lo abre con JavaScript:
+
+```php
+// Botón en la vista:
+<button onclick="openModal('modalNuevoProducto')">
+    + Nuevo Producto
+</button>
+
+// JavaScript que lo muestra/oculta:
+function openModal(id)  { document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+```
+
+---
+
+## Campos del formulario
+
+| Campo | Tipo | Obligatorio | Ejemplo |
+|---|---|---|---|
+| Nombre del producto | texto | Sí | `leche` |
+| Categoría | select | Sí | `Lácteos` |
+| Precio unitario | número | Sí | `2500` |
+| Unidad | texto | Sí | `kg`, `L`, `und` |
+| Stock inicial | número | Sí | `50` |
+| Stock mínimo | número | Sí | `10` |
+| Emoji / Icono | texto | Sí | `🥛` |
+
+Las categorías del select se cargan dinámicamente desde la BD:
+```php
+<?php foreach($categorias as $cat): ?>
+    <option value="<?= $cat['id_categoria'] ?>">
+        <?= htmlspecialchars($cat['nombre_categoria']) ?>
+    </option>
+<?php endforeach; ?>
+```
+
+---
+
+## El flujo completo
+
+```
+1. Admin hace clic en "+ Nuevo Producto"
+2. Se abre el modal con el formulario vacío
+3. Admin llena los datos y hace clic en "Guardar Producto"
+4. El formulario envía POST a admin_gestion_de_inventario.php
+5. El controlador detecta accion=crear y llama a crear()
+6. Se arman los datos y se llama a Inventario::registrar($datos)
+7. El modelo abre una transacción:
+   → INSERT en tabla producto
+   → INSERT en tabla inventario (con el stock inicial)
+8. Si todo OK → redirige con ?success=creado
+9. Si falla   → redirige con ?error=mensaje
+```
+
+---
+
+## ¿Cómo detecta el controlador qué acción ejecutar?
+
+El formulario envía un campo oculto `accion`:
+
+```html
+<input type="hidden" name="accion" value="crear">
+```
+
+El controlador lo lee y decide:
+```php
+$accion = $_POST['accion'] ?? '';
+
+if ($accion === 'crear')   $this->crear();
+if ($accion === 'editar')  $this->editar();
+if ($accion === 'eliminar') $this->eliminar();
+```
+
+---
+
+## ¿Cómo se guarda en la BD?
+
+El modelo usa una **transacción** — si cualquier paso falla, deshace todo:
+
+```php
+BEGIN TRANSACTION
+
+  // 1. Inserta el producto
+  INSERT INTO producto (id_categoria, nombre, precio, descripcion, imagen, es_menu, disponible)
+  VALUES (...)
+  → obtiene el id_producto recién creado
+
+  // 2. Crea el registro de inventario con el stock inicial
+  INSERT INTO inventario (id_producto, cantidad_actual, cantidad_minima, fecha_actualizacion)
+  VALUES (:id_producto, :stock, :minimo, CURDATE())
+
+COMMIT ✓  /  ROLLBACK si algo falla ✗
+```
+
+El campo `es_menu = 0` indica que es un insumo de inventario, no un plato del menú visible para clientes.
+
+---
+
+## ¿Cómo se muestra el resultado?
+
+No usa el sistema de alertas con `$_SESSION`. Usa parámetros GET en la URL:
+
+```php
+// Éxito:
+header("Location: admin_gestion_de_inventario.php?success=creado");
+
+// Error:
+header("Location: admin_gestion_de_inventario.php?error=mensaje_del_error");
+```
+
+La vista los detecta y muestra banners de color:
+```php
+<?php if(isset($_GET['success'])): ?>
+    <div class="bg-green-100 ...">Operación realizada correctamente</div>
+<?php endif; ?>
+
+<?php if(isset($_GET['error'])): ?>
+    <div class="bg-red-100 ..."><?= htmlspecialchars($_GET['error']) ?></div>
+<?php endif; ?>
+```
+
+---
+
+## Cosas a tener en cuenta
+
+- **No hay validación en el controlador** — toda la validación es HTML (`required`, `min`, `type="number"`). Si alguien desactiva JavaScript o manipula el formulario, podría enviar datos vacíos.
+- **El emoji es obligatorio** — el campo `imagen` guarda un emoji que se muestra en la tabla. Por defecto viene `📦` en el formulario de edición, pero en el de crear está vacío.
+- **El stock mínimo define las alertas** — si `stock_actual <= stock_minimo` aparece el badge amarillo "Stock bajo". Si `stock_actual == 0` aparece el rojo "Sin stock".
+- **La transacción protege la consistencia** — si el INSERT en `inventario` falla, el producto tampoco queda guardado. No hay productos huérfanos sin registro de stock.
