@@ -4,13 +4,33 @@ require_once __DIR__ . '/../models/Reportes.php';
 
 class ReportesController {
     private $reportesModel;
+    private $dbError = null;
 
     public function __construct() {
-        $db = new Database();
-        $this->reportesModel = new Reportes($db->conectar());
+        try {
+            $db = new Database();
+            $this->reportesModel = new Reportes($db->conectar());
+        } catch (Exception $e) {
+            $this->dbError = $e->getMessage();
+        }
+    }
+
+    private function baseUrl() {
+        $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host  = $_SERVER['HTTP_HOST'];
+        $base  = rtrim(dirname(dirname(dirname($_SERVER['SCRIPT_NAME']))), '/');
+        if ($base === '.') $base = '';
+        return "{$proto}://{$host}{$base}/views/dashboard";
     }
 
     public function obtenerDatosGraficos() {
+        if ($this->dbError) {
+            return [
+                'kpis' => ['total_productos' => 0, 'valor_total' => 0, 'total_usuarios' => 0],
+                'grafico_categorias' => ['labels' => [], 'data' => []],
+                'grafico_stock'      => ['labels' => [], 'data' => []]
+            ];
+        }
         $kpis = $this->reportesModel->obtenerKPIsGenerales();
         $categoriasData = $this->reportesModel->obtenerValorPorCategoria();
         $stockData = $this->reportesModel->obtenerEstadoStock();
@@ -40,6 +60,7 @@ class ReportesController {
         ];
     }
     public function manejarPeticion() {
+        if ($this->dbError) return null;
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
             $accion = $_POST['accion'];
 
@@ -76,13 +97,13 @@ class ReportesController {
                     'datos_json' => $_POST['datos_json'] ?? '[]'
                 ];
                 $this->reportesModel->guardarHistorial($datosGuardar);
-                header("Location: admin_reportes.php?success=guardado");
+                header("Location: " . $this->baseUrl() . "/admin_reportes.php?success=guardado");
                 exit;
             } elseif ($accion === 'eliminar_reporte') {
                 $id = $_POST['id_reporte'] ?? null;
                 if ($id) {
                     $this->reportesModel->eliminarHistorial($id);
-                    header("Location: admin_reportes.php?success=eliminado");
+                    header("Location: " . $this->baseUrl() . "/admin_reportes.php?success=eliminado");
                     exit;
                 }
             }
@@ -91,6 +112,7 @@ class ReportesController {
     }
 
     public function obtenerHistorial() {
+        if ($this->dbError) return [];
         return $this->reportesModel->obtenerHistorial();
     }
     

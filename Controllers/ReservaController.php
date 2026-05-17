@@ -4,13 +4,27 @@ require_once __DIR__ . '/../models/Reserva.php';
 
 class ReservaController {
     private $model;
+    private $dbError = null;
 
     public function __construct() {
-        $db = new Database();
-        $this->model = new Reserva($db->conectar());
+        try {
+            $db = new Database();
+            $this->model = new Reserva($db->conectar());
+        } catch (Exception $e) {
+            $this->dbError = $e->getMessage();
+        }
+    }
+
+    private function baseUrl() {
+        $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host  = $_SERVER['HTTP_HOST'];
+        $base  = rtrim(dirname(dirname(dirname($_SERVER['SCRIPT_NAME']))), '/');
+        if ($base === '.') $base = '';
+        return "{$proto}://{$host}{$base}/views/dashboard";
     }
 
     public function manejarPeticion() {
+        if ($this->dbError) return;
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
 
         $accion = $_POST['accion'] ?? '';
@@ -40,9 +54,9 @@ class ReservaController {
 
         $resultado = $this->model->crear($datos);
         if ($resultado === true) {
-            header("Location: admin_reservas.php?success=creada");
+            header("Location: " . $this->baseUrl() . "/admin_reservas.php?success=creada");
         } else {
-            header("Location: admin_reservas.php?error=" . urlencode($resultado));
+            header("Location: " . $this->baseUrl() . "/admin_reservas.php?error=" . urlencode($resultado));
         }
         exit;
     }
@@ -50,7 +64,7 @@ class ReservaController {
     private function editar() {
         $id = (int)($_POST['id_reserva'] ?? 0);
         if (!$id) {
-            header("Location: admin_reservas.php?error=ID+requerido");
+            header("Location: " . $this->baseUrl() . "/admin_reservas.php?error=ID+requerido");
             exit;
         }
 
@@ -64,9 +78,9 @@ class ReservaController {
 
         $resultado = $this->model->actualizar($id, $datos);
         if ($resultado === true) {
-            header("Location: admin_reservas.php?success=editada");
+            header("Location: " . $this->baseUrl() . "/admin_reservas.php?success=editada");
         } else {
-            header("Location: admin_reservas.php?error=" . urlencode($resultado));
+            header("Location: " . $this->baseUrl() . "/admin_reservas.php?error=" . urlencode($resultado));
         }
         exit;
     }
@@ -74,20 +88,23 @@ class ReservaController {
     private function eliminar() {
         $id = (int)($_POST['id_reserva'] ?? 0);
         if (!$id) {
-            header("Location: admin_reservas.php?error=ID+requerido");
+            header("Location: " . $this->baseUrl() . "/admin_reservas.php?error=ID+requerido");
             exit;
         }
 
         $resultado = $this->model->eliminar($id);
         if ($resultado === true) {
-            header("Location: admin_reservas.php?success=eliminada");
+            header("Location: " . $this->baseUrl() . "/admin_reservas.php?success=eliminada");
         } else {
-            header("Location: admin_reservas.php?error=" . urlencode($resultado));
+            header("Location: " . $this->baseUrl() . "/admin_reservas.php?error=" . urlencode($resultado));
         }
         exit;
     }
 
     public function obtenerDatosVista() {
+        if ($this->dbError) {
+            return ['reservas'=>[],'estados'=>[],'mesas'=>[],'clientes'=>[],'kpiEstados'=>[],'reservasHoy'=>0,'reservasManana'=>0,'varHoy'=>0,'varManana'=>0,'filtro_estado'=>'todos','filtro_fecha'=>'','filtro_tab'=>'todos','fecha_efectiva'=>'','pagina'=>1,'totalPaginas'=>1,'total'=>0,'por_pagina'=>10];
+        }
         $filtro_estado = $_GET['estado']  ?? 'todos';
         $filtro_fecha  = $_GET['fecha']   ?? '';
         $filtro_tab    = $_GET['tab']     ?? 'todos';

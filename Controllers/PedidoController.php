@@ -4,13 +4,27 @@ require_once __DIR__ . '/../models/Pedido.php';
 
 class PedidoController {
     private $model;
+    private $dbError = null;
 
     public function __construct() {
-        $db = new Database();
-        $this->model = new Pedido($db->conectar());
+        try {
+            $db = new Database();
+            $this->model = new Pedido($db->conectar());
+        } catch (Exception $e) {
+            $this->dbError = $e->getMessage();
+        }
+    }
+
+    private function baseUrl() {
+        $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host  = $_SERVER['HTTP_HOST'];
+        $base  = rtrim(dirname(dirname(dirname($_SERVER['SCRIPT_NAME']))), '/');
+        if ($base === '.') $base = '';
+        return "{$proto}://{$host}{$base}/views/dashboard";
     }
 
     public function manejarPeticion() {
+        if ($this->dbError) return;
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
 
         $accion = $_POST['accion'] ?? '';
@@ -23,12 +37,15 @@ class PedidoController {
                 $this->model->cambiarEstado($id_pedido, $id_estado_pedido);
             }
 
-            header("Location: admin_pedidos.php?success=estado_actualizado");
+            header("Location: " . $this->baseUrl() . "/admin_pedidos.php?success=estado_actualizado");
             exit;
         }
     }
 
     public function obtenerDatosVista() {
+        if ($this->dbError) {
+            return ['pedidos'=>[],'estados'=>[],'kpiEstados'=>[],'pedidosHoy'=>0,'varPedidos'=>0,'filtro_estado'=>'todos','filtro_fecha'=>'','pagina'=>1,'totalPaginas'=>1,'total'=>0,'por_pagina'=>10];
+        }
         $filtro_estado = $_GET['estado'] ?? 'todos';
         $filtro_fecha  = $_GET['fecha']  ?? '';
         $pagina        = max(1, (int)($_GET['pagina'] ?? 1));
@@ -68,6 +85,7 @@ class PedidoController {
     }
 
     public function obtenerDetallePedido($id_pedido) {
+        if ($this->dbError) return ['pedido' => null, 'detalle' => [], 'estados' => []];
         return [
             'pedido'  => $this->model->getById($id_pedido),
             'detalle' => $this->model->getDetalle($id_pedido),

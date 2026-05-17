@@ -4,13 +4,27 @@ require_once __DIR__ . '/../models/Inventario.php';
 
 class InventarioController {
     private $inventarioModel;
+    private $dbError = null;
 
     public function __construct() {
-        $db = new Database();
-        $this->inventarioModel = new Inventario($db->conectar());
+        try {
+            $db = new Database();
+            $this->inventarioModel = new Inventario($db->conectar());
+        } catch (Exception $e) {
+            $this->dbError = $e->getMessage();
+        }
+    }
+
+    private function baseUrl() {
+        $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host  = $_SERVER['HTTP_HOST'];
+        $base  = rtrim(dirname(dirname(dirname($_SERVER['SCRIPT_NAME']))), '/');
+        if ($base === '.') $base = '';
+        return "{$proto}://{$host}{$base}/views/dashboard";
     }
 
     public function manejarPeticion() {
+        if ($this->dbError) return;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $accion = $_POST['accion'] ?? '';
             
@@ -65,6 +79,9 @@ class InventarioController {
     }
 
     public function obtenerDatosVista() {
+        if ($this->dbError) {
+            return ['inventario' => [], 'categorias' => []];
+        }
         return [
             'inventario' => $this->inventarioModel->obtenerTodos(),
             'categorias' => $this->inventarioModel->obtenerCategorias()
@@ -85,10 +102,10 @@ class InventarioController {
         $resultado = $this->inventarioModel->registrar($datos);
         
         if ($resultado === true) {
-            header("Location: admin_gestion_de_inventario.php?success=creado");
+            header("Location: " . $this->baseUrl() . "/admin_gestion_de_inventario.php?success=creado");
             exit;
         } else {
-            header("Location: admin_gestion_de_inventario.php?error=" . urlencode($resultado));
+            header("Location: " . $this->baseUrl() . "/admin_gestion_de_inventario.php?error=" . urlencode($resultado));
             exit;
         }
     }
@@ -96,7 +113,7 @@ class InventarioController {
     private function editar() {
         $id_producto = $_POST['id_producto'] ?? null;
         if (!$id_producto) {
-            header("Location: admin_gestion_de_inventario.php?error=ID requerido");
+            header("Location: " . $this->baseUrl() . "/admin_gestion_de_inventario.php?error=ID requerido");
             exit;
         }
 
@@ -113,10 +130,10 @@ class InventarioController {
         $resultado = $this->inventarioModel->actualizar($id_producto, $datos);
         
         if ($resultado === true) {
-            header("Location: admin_gestion_de_inventario.php?success=editado");
+            header("Location: " . $this->baseUrl() . "/admin_gestion_de_inventario.php?success=editado");
             exit;
         } else {
-            header("Location: admin_gestion_de_inventario.php?error=" . urlencode($resultado));
+            header("Location: " . $this->baseUrl() . "/admin_gestion_de_inventario.php?error=" . urlencode($resultado));
             exit;
         }
     }
@@ -124,17 +141,17 @@ class InventarioController {
     private function eliminar() {
         $id_producto = $_POST['id_producto'] ?? null;
         if (!$id_producto) {
-            header("Location: admin_gestion_de_inventario.php?error=ID requerido");
+            header("Location: " . $this->baseUrl() . "/admin_gestion_de_inventario.php?error=ID requerido");
             exit;
         }
 
         $resultado = $this->inventarioModel->eliminar($id_producto);
         
         if ($resultado === true) {
-            header("Location: admin_gestion_de_inventario.php?success=eliminado");
+            header("Location: " . $this->baseUrl() . "/admin_gestion_de_inventario.php?success=eliminado");
             exit;
         } else {
-            header("Location: admin_gestion_de_inventario.php?error=" . urlencode($resultado));
+            header("Location: " . $this->baseUrl() . "/admin_gestion_de_inventario.php?error=" . urlencode($resultado));
             exit;
         }
     }

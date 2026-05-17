@@ -27,7 +27,7 @@ class Database
 
         } catch (PDOException $e) {
 
-            die("Error de conexión: " . $e->getMessage());
+            throw new RuntimeException("Error de conexión: " . $e->getMessage());
         }
 
         return $this->conn;

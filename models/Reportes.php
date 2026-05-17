@@ -106,40 +106,74 @@ class Reportes {
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     public function guardarHistorial($datos) {
-        $sql = "INSERT INTO reportes_guardados (generado_por_nombre, tipo_filtro, valor_filtro, total_productos, valor_total, datos_json) 
-                VALUES (:nombre, :tipo, :valor, :total_prod, :valor_total, :json)";
-        $stmt = $this->conn->prepare($sql);
-        $stmt->bindParam(':nombre', $datos['nombre_usuario']);
-        $stmt->bindParam(':tipo', $datos['tipo_filtro']);
-        $stmt->bindParam(':valor', $datos['valor_filtro']);
-        $stmt->bindParam(':total_prod', $datos['total_productos']);
-        $stmt->bindParam(':valor_total', $datos['valor_total']);
-        $stmt->bindParam(':json', $datos['datos_json']);
-        return $stmt->execute();
+        try {
+            // Crear tabla si no existe
+            $this->conn->exec("CREATE TABLE IF NOT EXISTS reportes_guardados (
+                id_reporte         INT PRIMARY KEY AUTO_INCREMENT,
+                fecha_generacion   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                generado_por_nombre VARCHAR(150) NOT NULL,
+                tipo_filtro        VARCHAR(50)  NOT NULL,
+                valor_filtro       VARCHAR(100) NOT NULL,
+                total_productos    INT          NOT NULL DEFAULT 0,
+                valor_total        DECIMAL(12,2) NOT NULL DEFAULT 0,
+                datos_json         LONGTEXT
+            )");
+            $sql = "INSERT INTO reportes_guardados (generado_por_nombre, tipo_filtro, valor_filtro, total_productos, valor_total, datos_json) 
+                    VALUES (:nombre, :tipo, :valor, :total_prod, :valor_total, :json)";
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bindParam(':nombre',      $datos['nombre_usuario']);
+            $stmt->bindParam(':tipo',        $datos['tipo_filtro']);
+            $stmt->bindParam(':valor',       $datos['valor_filtro']);
+            $stmt->bindParam(':total_prod',  $datos['total_productos']);
+            $stmt->bindParam(':valor_total', $datos['valor_total']);
+            $stmt->bindParam(':json',        $datos['datos_json']);
+            return $stmt->execute();
+        } catch (Exception $e) {
+            return false;
+        }
     }
 
     public function obtenerHistorial() {
-        $sql = "SELECT id_reporte, fecha_generacion, generado_por_nombre, tipo_filtro, valor_filtro, total_productos, valor_total 
-                FROM reportes_guardados 
-                ORDER BY fecha_generacion DESC";
-        $stmt = $this->conn->prepare($sql);
-        $stmt->execute();
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        try {
+            // Crear tabla si no existe
+            $this->conn->exec("CREATE TABLE IF NOT EXISTS reportes_guardados (
+                id_reporte         INT PRIMARY KEY AUTO_INCREMENT,
+                fecha_generacion   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                generado_por_nombre VARCHAR(150) NOT NULL,
+                tipo_filtro        VARCHAR(50)  NOT NULL,
+                valor_filtro       VARCHAR(100) NOT NULL,
+                total_productos    INT          NOT NULL DEFAULT 0,
+                valor_total        DECIMAL(12,2) NOT NULL DEFAULT 0,
+                datos_json         LONGTEXT
+            )");
+            $sql = "SELECT id_reporte, fecha_generacion, generado_por_nombre, tipo_filtro, valor_filtro, total_productos, valor_total 
+                    FROM reportes_guardados 
+                    ORDER BY fecha_generacion DESC";
+            $stmt = $this->conn->prepare($sql);
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            return [];
+        }
     }
     
     public function obtenerReporteGuardado($id_reporte) {
-        $sql = "SELECT * FROM reportes_guardados WHERE id_reporte = :id";
-        $stmt = $this->conn->prepare($sql);
-        $stmt->bindParam(':id', $id_reporte);
-        $stmt->execute();
-        return $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $sql = "SELECT * FROM reportes_guardados WHERE id_reporte = :id";
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bindParam(':id', $id_reporte);
+            $stmt->execute();
+            return $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (Exception $e) { return null; }
     }
 
     public function eliminarHistorial($id_reporte) {
-        $sql = "DELETE FROM reportes_guardados WHERE id_reporte = :id";
-        $stmt = $this->conn->prepare($sql);
-        $stmt->bindParam(':id', $id_reporte);
-        return $stmt->execute();
+        try {
+            $sql = "DELETE FROM reportes_guardados WHERE id_reporte = :id";
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bindParam(':id', $id_reporte);
+            return $stmt->execute();
+        } catch (Exception $e) { return false; }
     }
 }
 ?>

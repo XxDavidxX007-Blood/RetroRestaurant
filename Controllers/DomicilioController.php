@@ -4,13 +4,27 @@ require_once __DIR__ . '/../models/Domicilio.php';
 
 class DomicilioController {
     private $model;
+    private $dbError = null;
 
     public function __construct() {
-        $db = new Database();
-        $this->model = new Domicilio($db->conectar());
+        try {
+            $db = new Database();
+            $this->model = new Domicilio($db->conectar());
+        } catch (Exception $e) {
+            $this->dbError = $e->getMessage();
+        }
+    }
+
+    private function baseUrl() {
+        $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host  = $_SERVER['HTTP_HOST'];
+        $base  = rtrim(dirname(dirname(dirname($_SERVER['SCRIPT_NAME']))), '/');
+        if ($base === '.') $base = '';
+        return "{$proto}://{$host}{$base}/views/dashboard";
     }
 
     public function manejarPeticion() {
+        if ($this->dbError) return;
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
         $accion = $_POST['accion'] ?? '';
 
@@ -22,8 +36,8 @@ class DomicilioController {
                 'id_estado_pedido' => (int)($_POST['id_estado_pedido'] ?? 1),
             ];
             $r = $this->model->crear($datos);
-            if ($r === true) header("Location: admin_domicilios.php?success=creado");
-            else             header("Location: admin_domicilios.php?error=" . urlencode($r));
+            if ($r === true) header("Location: " . $this->baseUrl() . "/admin_domicilios.php?success=creado");
+            else             header("Location: " . $this->baseUrl() . "/admin_domicilios.php?error=" . urlencode($r));
             exit;
         }
 
@@ -31,11 +45,29 @@ class DomicilioController {
             $id  = (int)($_POST['id_pedido'] ?? 0);
             $est = (int)($_POST['id_estado_pedido'] ?? 0);
             if ($id && $est) $this->model->cambiarEstado($id, $est);
-            header("Location: admin_domicilios.php?success=estado"); exit;
+            header("Location: " . $this->baseUrl() . "/admin_domicilios.php?success=estado"); exit;
+        }
+
+        if ($accion === 'eliminar') {
+            $id = (int)($_POST['id_pedido'] ?? 0);
+            if ($id) {
+                $resultado = $this->model->eliminar($id);
+                if ($resultado === true) {
+                    header("Location: " . $this->baseUrl() . "/admin_domicilios.php?success=eliminado");
+                } else {
+                    header("Location: " . $this->baseUrl() . "/admin_domicilios.php?error=" . urlencode($resultado));
+                }
+            } else {
+                header("Location: " . $this->baseUrl() . "/admin_domicilios.php?error=ID+requerido");
+            }
+            exit;
         }
     }
 
     public function obtenerDatosVista() {
+        if ($this->dbError) {
+            return ['domicilios'=>[],'estados'=>[],'clientes'=>[],'meseros'=>[],'kpiEstados'=>[],'hoy'=>0,'var'=>0,'filtro_estado'=>'todos','filtro_fecha'=>'','pagina'=>1,'totalPaginas'=>1,'total'=>0,'por_pagina'=>10];
+        }
         $filtro_estado = $_GET['estado'] ?? 'todos';
         $filtro_fecha  = $_GET['fecha']  ?? '';
         $pagina        = max(1, (int)($_GET['pagina'] ?? 1));

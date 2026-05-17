@@ -38,7 +38,12 @@ require_once __DIR__ . '/../layouts/sidebar.php';
   <div class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl flex items-center gap-2">
     <i class="fas fa-check-circle"></i>
     <span class="text-sm font-body">
-      <?= $_GET['success']==='creado' ? 'Domicilio registrado correctamente.' : 'Estado actualizado correctamente.' ?>
+      <?php
+        if ($_GET['success']==='creado')    echo 'Domicilio registrado correctamente.';
+        elseif ($_GET['success']==='estado') echo 'Estado actualizado correctamente.';
+        elseif ($_GET['success']==='eliminado') echo 'Domicilio eliminado correctamente.';
+        else echo 'Operación realizada correctamente.';
+      ?>
     </span>
   </div>
   <?php endif; ?>
@@ -190,10 +195,16 @@ require_once __DIR__ . '/../layouts/sidebar.php';
               </span>
             </td>
             <td class="px-5 py-4 text-center">
-              <button onclick="abrirEstado(<?= $d['id_pedido'] ?>, <?= $d['id_estado_pedido'] ?>)"
-                class="w-8 h-8 rounded-lg bg-gray-100 hover:bg-orange-100 text-gray-500 hover:text-orange-600 transition flex items-center justify-center mx-auto" title="Cambiar estado">
-                <i class="fas fa-pen text-xs"></i>
-              </button>
+              <div class="flex items-center justify-center gap-2">
+                <button onclick="abrirEstado(<?= $d['id_pedido'] ?>, <?= $d['id_estado_pedido'] ?>)"
+                  class="w-8 h-8 rounded-lg bg-gray-100 hover:bg-orange-100 text-gray-500 hover:text-orange-600 transition flex items-center justify-center" title="Cambiar estado">
+                  <i class="fas fa-pen text-xs"></i>
+                </button>
+                <button onclick="abrirEliminar(<?= $d['id_pedido'] ?>, '#ORD-<?= $num ?>')"
+                  class="w-8 h-8 rounded-lg bg-gray-100 hover:bg-red-100 text-gray-500 hover:text-red-600 transition flex items-center justify-center" title="Eliminar domicilio">
+                  <i class="fas fa-trash text-xs"></i>
+                </button>
+              </div>
             </td>
           </tr>
           <?php endforeach; ?>
@@ -345,6 +356,35 @@ function abrirEstado(id, estadoActual) {
   }
   document.getElementById('modalEstado').classList.remove('hidden');
 }
+function abrirEliminar(id, num) {
+  document.getElementById('del_id').value = id;
+  document.getElementById('del_num').textContent = num;
+  document.getElementById('modalEliminar').classList.remove('hidden');
+}
 </script>
+
+<!-- MODAL ELIMINAR DOMICILIO -->
+<div id="modalEliminar" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+    <div class="p-8 text-center">
+      <div class="w-16 h-16 rounded-full bg-red-100 text-red-500 flex items-center justify-center text-3xl mx-auto mb-4">
+        <i class="fas fa-trash-alt"></i>
+      </div>
+      <h3 class="text-xl font-heading font-bold text-gray-800 mb-2">¿Eliminar domicilio?</h3>
+      <p class="text-gray-500 text-sm mb-1">Vas a eliminar el pedido <strong id="del_num"></strong>.</p>
+      <p class="text-gray-400 text-xs mb-6">Esta acción no se puede deshacer.</p>
+      <form action="admin_domicilios.php" method="POST" class="flex justify-center gap-3">
+        <input type="hidden" name="accion" value="eliminar">
+        <input type="hidden" name="id_pedido" id="del_id">
+        <button type="button" onclick="document.getElementById('modalEliminar').classList.add('hidden')"
+          class="px-5 py-2 text-gray-500 hover:bg-gray-100 rounded-xl font-body text-sm transition">Cancelar</button>
+        <button type="submit"
+          class="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-heading text-sm shadow transition">
+          Sí, eliminar
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
 
 <?php require_once __DIR__ . '/../layouts/footer.php'; ?>

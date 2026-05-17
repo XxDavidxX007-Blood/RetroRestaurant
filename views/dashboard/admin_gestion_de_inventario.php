@@ -1,5 +1,5 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) session_start();
 
 if (!isset($_SESSION['usuario']) || !in_array($_SESSION['usuario']['id_rol'], [1, '1', 'administrador'])) {
     $_rProto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -229,8 +229,17 @@ foreach ($inventario as $item) {
 
                             <td class="p-5">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-2xl">
-                                        <?= htmlspecialchars($item['imagen']) ?>
+                                    <div class="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden border border-gray-200 flex-shrink-0">
+                                        <?php
+                                        $imgInv = $item['imagen'] ?? null;
+                                        if (!empty($imgInv) && (str_contains($imgInv, '.jpg') || str_contains($imgInv, '.png') || str_contains($imgInv, '.webp') || str_contains($imgInv, '.jpeg'))):
+                                        ?>
+                                            <img src="../../img/inventario/<?= htmlspecialchars($imgInv) ?>"
+                                                 class="w-full h-full object-cover"
+                                                 onerror="this.parentElement.innerHTML='<i class=\'fas fa-box text-gray-400 text-xl\'></i>'">
+                                        <?php else: ?>
+                                            <i class="fas fa-box text-gray-400 text-xl"></i>
+                                        <?php endif; ?>
                                     </div>
                                     <div>
                                         <p class="font-bold text-retro-dark"><?= htmlspecialchars($item['nombre']) ?></p>

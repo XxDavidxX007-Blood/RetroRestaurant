@@ -1,4 +1,10 @@
 <?php
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+set_exception_handler(function($e) {
+    die('<pre style="background:#111;color:#f66;padding:20px;font-size:13px">' . htmlspecialchars($e->getMessage()) . "\n" . htmlspecialchars($e->getFile()) . ':' . $e->getLine() . '</pre>');
+});
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($_SESSION['usuario']) || !in_array($_SESSION['usuario']['id_rol'], [1, '1', 'administrador', 2, '2', 'empleado'])) {
     $_rProto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';

@@ -130,6 +130,23 @@ class Domicilio {
         return $stmt->execute([':e' => $id_estado_pedido, ':id' => $id_pedido]);
     }
 
+    public function eliminar($id_pedido) {
+        try {
+            $this->db->beginTransaction();
+            // Eliminar detalle del pedido si existe
+            $this->db->prepare("DELETE FROM detalle_pedido WHERE id_pedido = :id")->execute([':id' => $id_pedido]);
+            // Eliminar factura si existe
+            $this->db->prepare("DELETE FROM factura WHERE id_pedido = :id")->execute([':id' => $id_pedido]);
+            // Eliminar el pedido
+            $this->db->prepare("DELETE FROM pedido WHERE id_pedido = :id")->execute([':id' => $id_pedido]);
+            $this->db->commit();
+            return true;
+        } catch (Exception $e) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            return $e->getMessage();
+        }
+    }
+
     // ── CATÁLOGOS ─────────────────────────────────────────────────
 
     public function getEstados() {

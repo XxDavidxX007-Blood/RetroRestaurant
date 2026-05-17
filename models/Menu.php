@@ -7,11 +7,17 @@ class Menu {
     }
 
     public function obtenerTodos() {
+        // Detectar si la columna es_menu existe en producción
+        $cols = $this->conn->query("SHOW COLUMNS FROM producto")->fetchAll(PDO::FETCH_COLUMN);
+        $tieneEsMenu = in_array('es_menu', $cols);
+
+        $whereMenu = $tieneEsMenu ? "WHERE p.es_menu = 1" : "WHERE p.disponible = 1";
+
         $sql = "SELECT p.id_producto, p.nombre, p.precio, p.descripcion, p.imagen, p.disponible,
                        c.nombre_categoria as categoria
                 FROM producto p
                 LEFT JOIN categoria_producto c ON p.id_categoria = c.id_categoria
-                WHERE p.es_menu = 1
+                {$whereMenu}
                 ORDER BY p.id_producto DESC";
         $stmt = $this->conn->prepare($sql);
         $stmt->execute();
@@ -27,10 +33,20 @@ class Menu {
 
     public function registrar($datos) {
         try {
+            // Detectar columnas disponibles
+            $cols = $this->conn->query("SHOW COLUMNS FROM producto")->fetchAll(PDO::FETCH_COLUMN);
+            $tieneEsMenu = in_array('es_menu', $cols);
+            $tieneUnidad = in_array('unidad', $cols);
+
             $this->conn->beginTransaction();
 
-            $sqlProducto = "INSERT INTO producto (id_categoria, nombre, precio, descripcion, imagen, es_menu, disponible) 
-                            VALUES (:id_categoria, :nombre, :precio, :descripcion, :imagen, 1, :disponible)";
+            $esMenuCol = $tieneEsMenu ? ", es_menu" : "";
+            $esMenuVal = $tieneEsMenu ? ", 1" : "";
+            $unidadCol = $tieneUnidad ? ", unidad" : "";
+            $unidadVal = $tieneUnidad ? ", 'plato'" : "";
+
+            $sqlProducto = "INSERT INTO producto (id_categoria, nombre, precio, descripcion, imagen, disponible{$esMenuCol}{$unidadCol}) 
+                            VALUES (:id_categoria, :nombre, :precio, :descripcion, :imagen, :disponible{$esMenuVal}{$unidadVal})";
             $stmtProducto = $this->conn->prepare($sqlProducto);
             $stmtProducto->bindParam(":id_categoria", $datos['id_categoria']);
             $stmtProducto->bindParam(":nombre", $datos['nombre']);
@@ -61,20 +77,29 @@ class Menu {
 
     public function actualizar($id_producto, $datos) {
         try {
-            $sqlProducto = "UPDATE producto 
-                            SET id_categoria = :id_categoria, nombre = :nombre, precio = :precio, 
-                                descripcion = :descripcion, imagen = :imagen, disponible = :disponible
-                            WHERE id_producto = :id_producto AND es_menu = 1";
+            // Si no se subió imagen nueva, mantener la actual
+            if ($datos['imagen'] === null) {
+                $sqlProducto = "UPDATE producto 
+                                SET id_categoria = :id_categoria, nombre = :nombre, precio = :precio, 
+                                    descripcion = :descripcion, disponible = :disponible
+                                WHERE id_producto = :id_producto AND es_menu = 1";
+            } else {
+                $sqlProducto = "UPDATE producto 
+                                SET id_categoria = :id_categoria, nombre = :nombre, precio = :precio, 
+                                    descripcion = :descripcion, imagen = :imagen, disponible = :disponible
+                                WHERE id_producto = :id_producto AND es_menu = 1";
+            }
             $stmtProducto = $this->conn->prepare($sqlProducto);
             $stmtProducto->bindParam(":id_categoria", $datos['id_categoria']);
-            $stmtProducto->bindParam(":nombre", $datos['nombre']);
-            $stmtProducto->bindParam(":precio", $datos['precio']);
-            $stmtProducto->bindParam(":descripcion", $datos['descripcion']);
-            $stmtProducto->bindParam(":imagen", $datos['imagen']);
-            $stmtProducto->bindParam(":disponible", $datos['disponible']);
-            $stmtProducto->bindParam(":id_producto", $id_producto);
+            $stmtProducto->bindParam(":nombre",       $datos['nombre']);
+            $stmtProducto->bindParam(":precio",       $datos['precio']);
+            $stmtProducto->bindParam(":descripcion",  $datos['descripcion']);
+            $stmtProducto->bindParam(":disponible",   $datos['disponible']);
+            $stmtProducto->bindParam(":id_producto",  $id_producto);
+            if ($datos['imagen'] !== null) {
+                $stmtProducto->bindParam(":imagen", $datos['imagen']);
+            }
             $stmtProducto->execute();
-
             return true;
         } catch (Exception $e) {
             return "Error: " . $e->getMessage();

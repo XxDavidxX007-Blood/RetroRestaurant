@@ -67,6 +67,18 @@ CREATE TABLE categoria_producto (
   nombre_categoria VARCHAR(50) NOT NULL UNIQUE
 );
 
+INSERT INTO categoria_producto (nombre_categoria) VALUES
+('Carnes'),
+('Lácteos'),
+('Verduras'),
+('Frutas'),
+('Bebidas'),
+('Granos y Cereales'),
+('Mariscos'),
+('Condimentos'),
+('Panadería'),
+('Postres');
+
 CREATE TABLE producto (
   id_producto  INT            PRIMARY KEY AUTO_INCREMENT,
   id_categoria INT            NOT NULL,
@@ -74,6 +86,8 @@ CREATE TABLE producto (
   precio       DECIMAL(10,2)  NOT NULL,
   descripcion  VARCHAR(150),
   imagen       VARCHAR(255),
+  unidad       VARCHAR(20)    NOT NULL DEFAULT 'unid',
+  es_menu      TINYINT(1)     NOT NULL DEFAULT 0,
   disponible   TINYINT(1)     NOT NULL DEFAULT 1,
   FOREIGN KEY (id_categoria) REFERENCES categoria_producto(id_categoria)
 );

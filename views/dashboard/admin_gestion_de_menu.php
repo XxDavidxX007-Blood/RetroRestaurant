@@ -1,5 +1,5 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) session_start();
 
 if (!isset($_SESSION['usuario']) || !in_array($_SESSION['usuario']['id_rol'], [1, '1', 'administrador'])) {
     $_rProto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -171,8 +171,16 @@ if ($totalPlatos > 0) {
 
                             <td class="p-5">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-14 h-14 rounded-xl bg-gray-100 flex items-center justify-center text-3xl shadow-inner border border-gray-200">
-                                        <?= htmlspecialchars($item['imagen']) ?>
+                                    <div class="w-14 h-14 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden shadow-inner border border-gray-200 flex-shrink-0">
+                                        <?php
+                                        $imgMenu = $item['imagen'] ?? '';
+                                        // Si es una ruta de archivo (contiene /)
+                                        if (!empty($imgMenu) && (str_contains($imgMenu, '/') || str_contains($imgMenu, '.'))) {
+                                            echo '<img src="../../img/menu/' . htmlspecialchars($imgMenu) . '" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML=\'🍽️\'">';
+                                        } else {
+                                            echo '<span class="text-3xl">' . (empty($imgMenu) ? '🍽️' : htmlspecialchars($imgMenu)) . '</span>';
+                                        }
+                                        ?>
                                     </div>
                                     <div>
                                         <p class="font-bold text-retro-dark text-lg"><?= htmlspecialchars($item['nombre']) ?></p>
@@ -244,7 +252,7 @@ if ($totalPlatos > 0) {
             </button>
         </div>
         <div class="p-6 overflow-y-auto">
-            <form action="admin_gestion_de_menu.php" method="POST">
+            <form action="admin_gestion_de_menu.php" method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="accion" value="crear">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div class="md:col-span-2">
@@ -264,11 +272,28 @@ if ($totalPlatos > 0) {
                         <label class="block text-gray-700 font-bold mb-2">Precio de Venta ($)</label>
                         <input type="number" name="precio" min="0" step="0.01" placeholder="0.00" required class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition">
                     </div>
-                    <div>
+                    <div class="md:col-span-2">
                         <label class="block text-gray-700 font-bold mb-2">Descripción (Visible para el cliente)</label>
                         <textarea name="descripcion" rows="3" placeholder="Ingredientes o descripción atractiva..." class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition"></textarea>
                     </div>
-                    <div class="flex items-center pt-8">
+                    <!-- Imagen -->
+                    <div class="md:col-span-2">
+                        <label class="block text-gray-700 font-bold mb-2">Imagen del Plato</label>
+                        <div class="flex items-center gap-4">
+                            <div id="nuevo_preview_wrap" class="w-20 h-20 rounded-xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                <i class="fas fa-image text-gray-400 text-2xl" id="nuevo_preview_icon"></i>
+                                <img id="nuevo_preview_img" src="" class="hidden w-full h-full object-cover rounded-xl">
+                            </div>
+                            <div class="flex-1">
+                                <label class="cursor-pointer flex items-center gap-2 px-4 py-3 border-2 border-dashed border-blue-300 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition">
+                                    <i class="fas fa-upload text-blue-500"></i>
+                                    <span class="text-gray-600 text-sm font-medium" id="nuevo_file_label">Seleccionar imagen (JPG, PNG, WEBP — máx. 2MB)</span>
+                                    <input type="file" name="imagen_file" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="previewImagen(this,'nuevo_preview_img','nuevo_preview_icon','nuevo_file_label')">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
                         <label class="flex items-center cursor-pointer">
                             <input type="checkbox" name="disponible" checked class="form-checkbox h-6 w-6 text-blue-600 rounded">
                             <span class="ml-3 text-gray-700 font-bold">Mostrar en Catálogo (Disponible)</span>
@@ -296,7 +321,7 @@ if ($totalPlatos > 0) {
             </button>
         </div>
         <div class="p-6 overflow-y-auto">
-            <form action="admin_gestion_de_menu.php" method="POST">
+            <form action="admin_gestion_de_menu.php" method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="accion" value="editar">
                 <input type="hidden" name="id_producto" id="edit_id_producto">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -320,6 +345,22 @@ if ($totalPlatos > 0) {
                     <div class="md:col-span-2">
                         <label class="block text-gray-700 font-bold mb-2">Descripción (Visible para el cliente)</label>
                         <textarea name="descripcion" id="edit_descripcion" rows="3" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition"></textarea>
+                    </div>
+                    <!-- Imagen -->
+                    <div class="md:col-span-2">
+                        <label class="block text-gray-700 font-bold mb-2">Imagen del Plato</label>
+                        <div class="flex items-center gap-4">
+                            <div class="w-20 h-20 rounded-xl bg-gray-100 border-2 border-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                <img id="edit_preview_img" src="" class="w-full h-full object-cover rounded-xl">
+                            </div>
+                            <div class="flex-1">
+                                <label class="cursor-pointer flex items-center gap-2 px-4 py-3 border-2 border-dashed border-blue-300 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition">
+                                    <i class="fas fa-upload text-blue-500"></i>
+                                    <span class="text-gray-600 text-sm font-medium" id="edit_file_label">Cambiar imagen (dejar vacío para mantener la actual)</span>
+                                    <input type="file" name="imagen_file" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="previewImagen(this,'edit_preview_img',null,'edit_file_label')">
+                                </label>
+                            </div>
+                        </div>
                     </div>
                     <div class="flex items-center pt-4">
                         <label class="flex items-center cursor-pointer">
@@ -370,22 +411,52 @@ if ($totalPlatos > 0) {
         document.getElementById(id).classList.add('hidden');
     }
 
+    function previewImagen(input, imgId, iconId, labelId) {
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            if (file.size > 2 * 1024 * 1024) {
+                alert('La imagen no puede superar 2MB');
+                input.value = '';
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.getElementById(imgId);
+                img.src = e.target.result;
+                img.classList.remove('hidden');
+                if (iconId) document.getElementById(iconId).classList.add('hidden');
+                if (labelId) document.getElementById(labelId).textContent = file.name;
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
     function abrirModalEditar(item) {
         document.getElementById('edit_id_producto').value = item.id_producto;
         document.getElementById('edit_nombre').value = item.nombre;
         
         let catSelect = document.getElementById('edit_categoria');
         for (let i=0; i<catSelect.options.length; i++) {
-            if (catSelect.options[i].text === item.categoria) {
+            if (catSelect.options[i].value == item.id_categoria || catSelect.options[i].text === item.categoria) {
                 catSelect.selectedIndex = i;
                 break;
             }
         }
 
         document.getElementById('edit_precio').value = item.precio;
-        document.getElementById('edit_descripcion').value = item.descripcion;
-        document.getElementById('edit_imagen').value = item.imagen;
+        document.getElementById('edit_descripcion').value = item.descripcion || '';
         document.getElementById('edit_disponible').checked = item.disponible == 1;
+
+        // Mostrar imagen actual
+        const previewImg = document.getElementById('edit_preview_img');
+        const img = item.imagen || '';
+        if (img && (img.includes('/') || img.includes('.'))) {
+            previewImg.src = '../../img/menu/' + img;
+            previewImg.onerror = function() { this.src = ''; this.parentElement.innerHTML = '<span class="text-3xl">🍽️</span>'; };
+        } else {
+            previewImg.src = '';
+            previewImg.parentElement.innerHTML = '<span class="text-3xl">' + (img || '🍽️') + '</span>';
+        }
         
         openModal('modalEditarProducto');
     }

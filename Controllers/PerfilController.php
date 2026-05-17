@@ -4,13 +4,27 @@ require_once __DIR__ . '/../models/usuario.php';
 
 class PerfilController {
     private $model;
+    private $dbError = null;
 
     public function __construct() {
-        $db = new Database();
-        $this->model = new Usuario($db->conectar());
+        try {
+            $db = new Database();
+            $this->model = new Usuario($db->conectar());
+        } catch (Exception $e) {
+            $this->dbError = $e->getMessage();
+        }
+    }
+
+    private function baseUrl() {
+        $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host  = $_SERVER['HTTP_HOST'];
+        $base  = rtrim(dirname(dirname(dirname($_SERVER['SCRIPT_NAME']))), '/');
+        if ($base === '.') $base = '';
+        return "{$proto}://{$host}{$base}/views/dashboard";
     }
 
     public function manejarPeticion() {
+        if ($this->dbError) return;
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
 
         $id = (int)($_SESSION['usuario']['id_usuario'] ?? 0);
@@ -24,17 +38,17 @@ class PerfilController {
 
         if (empty($nombre) || empty($apellidos)) {
             $_SESSION['perfil_error'] = 'Nombre y apellidos son obligatorios.';
-            header("Location: perfil.php"); exit;
+            header("Location: " . $this->baseUrl() . "/perfil.php"); exit;
         }
 
         if (!empty($password)) {
             if (strlen($password) < 6) {
                 $_SESSION['perfil_error'] = 'La contraseña debe tener al menos 6 caracteres.';
-                header("Location: perfil.php"); exit;
+                header("Location: " . $this->baseUrl() . "/perfil.php"); exit;
             }
             if ($password !== $confirmar) {
                 $_SESSION['perfil_error'] = 'Las contraseñas no coinciden.';
-                header("Location: perfil.php"); exit;
+                header("Location: " . $this->baseUrl() . "/perfil.php"); exit;
             }
         }
 
@@ -47,11 +61,11 @@ class PerfilController {
 
             if (!in_array($ext, $allowed)) {
                 $_SESSION['perfil_error'] = 'Formato de imagen no permitido. Usa JPG, PNG o WEBP.';
-                header("Location: perfil.php"); exit;
+                header("Location: " . $this->baseUrl() . "/perfil.php"); exit;
             }
             if ($file['size'] > 2 * 1024 * 1024) {
                 $_SESSION['perfil_error'] = 'La imagen no puede superar 2 MB.';
-                header("Location: perfil.php"); exit;
+                header("Location: " . $this->baseUrl() . "/perfil.php"); exit;
             }
 
             $nombreArchivo = 'user_' . $id . '_' . time() . '.' . $ext;
@@ -59,7 +73,7 @@ class PerfilController {
 
             if (!move_uploaded_file($file['tmp_name'], $destino)) {
                 $_SESSION['perfil_error'] = 'Error al guardar la imagen.';
-                header("Location: perfil.php"); exit;
+                header("Location: " . $this->baseUrl() . "/perfil.php"); exit;
             }
 
             // Borrar foto anterior si existe
@@ -92,10 +106,11 @@ class PerfilController {
             $_SESSION['perfil_error'] = $resultado;
         }
 
-        header("Location: perfil.php"); exit;
+        header("Location: " . $this->baseUrl() . "/perfil.php"); exit;
     }
 
     public function obtenerUsuario() {
+        if ($this->dbError) return null;
         $id = (int)($_SESSION['usuario']['id_usuario'] ?? 0);
         return $this->model->obtenerPorId($id);
     }

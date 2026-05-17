@@ -13,15 +13,28 @@ $titulo  = "CATÁLOGO";
 require_once __DIR__ . '/../../config/database.php';
 $db = (new database())->conectar();
 
+// Detectar si existe la columna es_menu
+$cols = $db->query("SHOW COLUMNS FROM producto")->fetchAll(PDO::FETCH_COLUMN);
+$tieneEsMenu = in_array('es_menu', $cols);
+$whereMenu   = $tieneEsMenu ? "WHERE p.es_menu = 1 AND p.disponible = 1" : "WHERE p.disponible = 1";
+
 $menu = $db->query("
     SELECT p.id_producto, p.nombre, p.descripcion, p.precio, p.imagen,
            cp.nombre_categoria AS categoria
     FROM producto p
     JOIN categoria_producto cp ON p.id_categoria = cp.id_categoria
+    {$whereMenu}
     ORDER BY cp.nombre_categoria, p.nombre
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-$categorias = $db->query("SELECT nombre_categoria FROM categoria_producto ORDER BY nombre_categoria")->fetchAll(PDO::FETCH_ASSOC);
+// Solo mostrar categorías que tienen platos del menú
+$categorias = $db->query("
+    SELECT DISTINCT cp.nombre_categoria
+    FROM categoria_producto cp
+    JOIN producto p ON p.id_categoria = cp.id_categoria
+    " . ($tieneEsMenu ? "WHERE p.es_menu = 1 AND p.disponible = 1" : "WHERE p.disponible = 1") . "
+    ORDER BY cp.nombre_categoria
+")->fetchAll(PDO::FETCH_ASSOC);
 
 require_once __DIR__ . '/../layouts/header.php';
 require_once __DIR__ . '/../layouts/sidebar.php';
@@ -156,7 +169,7 @@ require_once __DIR__ . '/../layouts/sidebar.php';
     $emojis = ['🍔','🍕','🥩','🍗','🥗','🍜','🥤','🍰','🍟','🥪','🌮','🍣','🥘','🍱','🧆'];
     foreach ($menu as $i => $item):
       $emoji = $emojis[$i % count($emojis)];
-      $bgStyle = !empty($item['imagen']) ? "background-image: url('../../img/productos/".htmlspecialchars($item['imagen'])."');" : "";
+      $bgStyle = !empty($item['imagen']) ? "background-image: url('../../img/menu/".htmlspecialchars($item['imagen'])."');" : "";
     ?>
     <div class="prod-card item group"
          style="animation-delay:<?= $i * 0.04 ?>s"
@@ -402,7 +415,7 @@ function abrirModal(id, nombre, precio, emoji, categoria, desc, img) {
   const imgContainer = document.getElementById('m-img-container');
   const emjEl = document.getElementById('m-emoji');
   if (img) {
-      imgContainer.style.backgroundImage = `url('../../img/productos/${img}')`;
+      imgContainer.style.backgroundImage = `url('../../img/menu/${img}')`;
       imgContainer.style.backgroundSize = 'cover';
       imgContainer.style.backgroundPosition = 'center';
       emjEl.classList.add('hidden');
