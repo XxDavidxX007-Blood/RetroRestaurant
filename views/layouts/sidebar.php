@@ -13,6 +13,12 @@ if (class_exists('CompraController')) {
     if (in_array($rol_id, ['3',3,'cliente'])) {
         CompraController::notificarPromocionesCliente($usuario['id_usuario']);
     }
+    // Marcar como leídas automáticamente si el usuario está en la página de notificaciones
+    $paginaActualSidebar = basename($_SERVER['PHP_SELF']);
+    $paginasNotif = ['admin_notificaciones.php', 'cliente_notificaciones.php'];
+    if (in_array($paginaActualSidebar, $paginasNotif)) {
+        CompraController::marcarLeidas($usuario['id_usuario']);
+    }
     $notifCount = CompraController::getNoLeidas($usuario['id_usuario']);
     $notifItems = CompraController::getNotificaciones($usuario['id_usuario'], 8);
 }
@@ -137,12 +143,22 @@ function notifUrl($tipo, $rol_id) {
 <!-- ═══════════════════════════════════════════════════════════
      SIDEBAR
 ════════════════════════════════════════════════════════════ -->
-<aside class="w-64 bg-retro-dark text-white shadow-2xl flex flex-col justify-between border-r border-gray-800 relative z-20">
+<aside id="sidebar" class="sidebar-panel w-64 bg-retro-dark text-white shadow-2xl flex flex-col justify-between border-r border-gray-800 relative z-20 transition-all duration-300 ease-in-out">
+
+    <!-- Botón toggle — visible siempre en el borde derecho del sidebar -->
+    <button id="sidebar-toggle"
+            onclick="toggleSidebar()"
+            title="Colapsar menú"
+            class="absolute -right-3.5 top-8 z-30 w-7 h-7 rounded-full bg-retro-gold text-retro-dark flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200 focus:outline-none">
+        <i id="sidebar-toggle-icon" class="fas fa-chevron-left text-xs"></i>
+    </button>
+
     <div>
-        <div class="h-24 flex items-center justify-center border-b border-gray-800 px-4">
+        <!-- Logo -->
+        <div class="h-24 flex items-center justify-center border-b border-gray-800 px-4 overflow-hidden">
             <div class="flex items-center gap-3">
-                <i class="fas fa-wine-glass text-retro-gold text-3xl"></i>
-                <div class="font-heading text-lg tracking-[0.2em] uppercase text-retro-gold mt-1">Retro Menú</div>
+                <i class="fas fa-wine-glass text-retro-gold text-3xl flex-shrink-0"></i>
+                <div id="sidebar-label" class="font-heading text-lg tracking-[0.2em] uppercase text-retro-gold mt-1 whitespace-nowrap transition-all duration-300">Retro Menú</div>
             </div>
         </div>
 
@@ -157,93 +173,145 @@ function notifUrl($tipo, $rol_id) {
                 }
                 $currentPage = basename($_SERVER['PHP_SELF']);
             ?>
-            <a href="<?= $dashboardHref ?>" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= in_array($currentPage, ['admin_dashboard.php','empleado.php','cliente.php']) ? 'bg-retro-gold text-retro-dark' : 'hover:text-retro-gold text-gray-300' ?> transition shadow-sm">
-                <i class="fas fa-gauge-high"></i>
-                <span class="font-heading tracking-widest text-xs uppercase">DASHBOARD</span>
+            <a href="<?= $dashboardHref ?>" title="Dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= in_array($currentPage, ['admin_dashboard.php','empleado.php','cliente.php']) ? 'bg-retro-gold text-retro-dark' : 'hover:text-retro-gold text-gray-300' ?> transition shadow-sm">
+                <i class="fas fa-gauge-high flex-shrink-0"></i>
+                <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">DASHBOARD</span>
             </a>
 
             <?php if (in_array($rol_id, ['1',1,'administrador'])): ?>
-                <a href="admin.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-users group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">GESTIÓN DE USUARIOS</span>
+                <a href="admin.php" title="Gestión de Usuarios" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-users flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">GESTIÓN DE USUARIOS</span>
                 </a>
-                <a href="admin_gestion_de_inventario.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_gestion_de_inventario.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-boxes-stacked group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">INVENTARIO</span>
+                <a href="admin_gestion_de_inventario.php" title="Inventario" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_gestion_de_inventario.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-boxes-stacked flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">INVENTARIO</span>
                 </a>
-                <a href="admin_gestion_de_menu.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_gestion_de_menu.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-utensils group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">MENÚ</span>
+                <a href="admin_gestion_de_menu.php" title="Menú" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_gestion_de_menu.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-utensils flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">MENÚ</span>
                 </a>
-                <a href="admin_pedidos.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_pedidos.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-receipt group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">PEDIDOS</span>
+                <a href="admin_pedidos.php" title="Pedidos" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_pedidos.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-receipt flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">PEDIDOS</span>
                 </a>
-                <a href="admin_reportes.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_reportes.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-chart-pie group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">REPORTES</span>
+                <a href="admin_reportes.php" title="Reportes" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_reportes.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-chart-pie flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">REPORTES</span>
                 </a>
-                <a href="admin_reservas.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_reservas.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-calendar-check group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">RESERVAS</span>
+                <a href="admin_reservas.php" title="Reservas" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_reservas.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-calendar-check flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">RESERVAS</span>
                 </a>
-                <a href="admin_domicilios.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_domicilios.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-motorcycle group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">DOMICILIOS</span>
+                <a href="admin_domicilios.php" title="Domicilios" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_domicilios.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-motorcycle flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">DOMICILIOS</span>
                 </a>
             <?php endif; ?>
 
             <?php if (in_array($rol_id, ['2',2,'empleado'])): ?>
-                <a href="cliente_catalogo.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='cliente_catalogo.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-store group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">CATÁLOGO</span>
+                <a href="cliente_catalogo.php" title="Catálogo" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='cliente_catalogo.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-store flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">CATÁLOGO</span>
                 </a>
-                <a href="admin_reservas.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_reservas.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-calendar-check group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">RESERVAS</span>
+                <a href="admin_reservas.php" title="Reservas" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_reservas.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-calendar-check flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">RESERVAS</span>
                 </a>
-                <a href="admin_pedidos.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_pedidos.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-receipt group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">PEDIDOS</span>
+                <a href="admin_pedidos.php" title="Pedidos" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_pedidos.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-receipt flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">PEDIDOS</span>
                 </a>
-                <a href="admin_domicilios.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_domicilios.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-motorcycle group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">DOMICILIOS</span>
+                <a href="admin_domicilios.php" title="Domicilios" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='admin_domicilios.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-motorcycle flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">DOMICILIOS</span>
                 </a>
             <?php endif; ?>
 
             <?php if (in_array($rol_id, ['3',3,'cliente'])): ?>
-                <a href="cliente_catalogo.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='cliente_catalogo.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-store group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">CATÁLOGO</span>
+                <a href="cliente_catalogo.php" title="Catálogo" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='cliente_catalogo.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-store flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">CATÁLOGO</span>
                 </a>
-                <a href="cliente_reservas.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='cliente_reservas.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-calendar-check group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">MIS RESERVAS</span>
+                <a href="cliente_reservas.php" title="Mis Reservas" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='cliente_reservas.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-calendar-check flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">MIS RESERVAS</span>
                 </a>
-                <a href="cliente_pedidos.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='cliente_pedidos.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-receipt group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">MIS PEDIDOS</span>
+                <a href="cliente_pedidos.php" title="Mis Pedidos" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='cliente_pedidos.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-receipt flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">MIS PEDIDOS</span>
                 </a>
-                <a href="cliente_domicilios.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='cliente_domicilios.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-motorcycle group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">DOMICILIOS</span>
+                <a href="cliente_domicilios.php" title="Domicilios" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='cliente_domicilios.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-motorcycle flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">DOMICILIOS</span>
                 </a>
-                <a href="perfil.php" class="flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='perfil.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
-                    <i class="fas fa-user group-hover:scale-110 transition"></i>
-                    <span class="font-heading tracking-widest text-xs uppercase">PERFIL</span>
+                <a href="perfil.php" title="Perfil" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg <?= $currentPage==='perfil.php'?'bg-retro-gold text-retro-dark':'hover:text-retro-gold text-gray-300' ?> transition group">
+                    <i class="fas fa-user flex-shrink-0 group-hover:scale-110 transition"></i>
+                    <span class="sidebar-text font-heading tracking-widest text-xs uppercase whitespace-nowrap overflow-hidden transition-all duration-300">PERFIL</span>
                 </a>
             <?php endif; ?>
         </nav>
     </div>
 
     <div class="p-4 border-t border-gray-800">
-        <a href="../../Controllers/AuthController.php?accion=logout" class="flex items-center justify-center gap-3 px-4 py-3 rounded-lg hover:text-retro-gold text-gray-500 transition text-xs uppercase tracking-[0.2em]">
-            <i class="fas fa-right-from-bracket"></i>
-            <span>CERRAR SESIÓN</span>
+        <a href="../../Controllers/AuthController.php?accion=logout" title="Cerrar sesión"
+           class="sidebar-link flex items-center justify-center gap-3 px-4 py-3 rounded-lg hover:text-retro-gold text-gray-500 transition text-xs uppercase tracking-[0.2em]">
+            <i class="fas fa-right-from-bracket flex-shrink-0"></i>
+            <span class="sidebar-text whitespace-nowrap overflow-hidden transition-all duration-300">CERRAR SESIÓN</span>
         </a>
     </div>
 </aside>
+
+<style>
+/* ── Estado colapsado del sidebar ── */
+#sidebar.sidebar-collapsed {
+    width: 4.5rem; /* 72px — solo íconos */
+}
+#sidebar.sidebar-collapsed .sidebar-text,
+#sidebar.sidebar-collapsed #sidebar-label {
+    width: 0;
+    opacity: 0;
+    pointer-events: none;
+    margin: 0;
+}
+#sidebar.sidebar-collapsed .sidebar-link {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+}
+#sidebar.sidebar-collapsed .sidebar-link gap-3 {
+    gap: 0;
+}
+/* Tooltip en modo colapsado */
+#sidebar.sidebar-collapsed .sidebar-link {
+    position: relative;
+}
+#sidebar.sidebar-collapsed .sidebar-link::after {
+    content: attr(title);
+    position: absolute;
+    left: calc(100% + 12px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: #1a1a1a;
+    color: #c5a059;
+    font-family: 'Playfair Display', serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    border-radius: 8px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+    z-index: 9999;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+#sidebar.sidebar-collapsed .sidebar-link:hover::after {
+    opacity: 1;
+}
+</style>
 
 <!-- ═══════════════════════════════════════════════════════════
      MAIN + HEADER
@@ -320,6 +388,8 @@ function toggleNotif(e) {
             notifPanel.style.opacity = '1';
             notifPanel.style.transform = 'translateY(0)';
         });
+        // Marcar como leídas al abrir el panel
+        marcarTodasLeidas();
     } else {
         cerrarNotif();
     }
@@ -347,12 +417,48 @@ window.addEventListener('resize', function() {
 function marcarTodasLeidas() {
     fetch('../../Controllers/NotifController.php?accion=marcar', { method: 'POST' })
         .then(() => {
+            // Quitar badge del contador
             const badge = document.getElementById('notif-badge');
             if (badge) badge.remove();
-            document.querySelectorAll('.notif-item').forEach(el => el.style.opacity = '0.45');
-            document.querySelectorAll('.notif-item [style*="background:#c5a059"]').forEach(d => d.remove());
+            // Opacidad a todos los items
+            document.querySelectorAll('.notif-item').forEach(el => {
+                el.style.opacity = '0.45';
+                el.setAttribute('onmouseout', `this.style.background='transparent';this.style.opacity='0.45'`);
+            });
+            // Quitar puntos dorados de "no leída"
+            document.querySelectorAll('.notif-item > div:last-child[style*="background:#c5a059"]').forEach(d => d.remove());
+            // Actualizar texto del header
+            const subHeader = document.querySelector('#notif-panel div[style*="sin leer"]');
+            if (subHeader) subHeader.textContent = 'Todo al día';
+            // Quitar el botón "Marcar leídas"
             const btn = document.querySelector('[onclick="marcarTodasLeidas()"]');
-            if (btn) btn.parentElement.removeChild(btn);
+            if (btn) btn.remove();
         });
+}
+
+// ── Sidebar colapsar / expandir ─────────────────────────────
+(function initSidebar() {
+    const sidebar     = document.getElementById('sidebar');
+    const icon        = document.getElementById('sidebar-toggle-icon');
+    const collapsed   = localStorage.getItem('sidebar_collapsed') === 'true';
+
+    if (collapsed) {
+        sidebar.classList.add('sidebar-collapsed');
+        icon.classList.replace('fa-chevron-left', 'fa-chevron-right');
+    }
+})();
+
+function toggleSidebar() {
+    const sidebar   = document.getElementById('sidebar');
+    const icon      = document.getElementById('sidebar-toggle-icon');
+    const isCollapsed = sidebar.classList.toggle('sidebar-collapsed');
+
+    if (isCollapsed) {
+        icon.classList.replace('fa-chevron-left', 'fa-chevron-right');
+    } else {
+        icon.classList.replace('fa-chevron-right', 'fa-chevron-left');
+    }
+
+    localStorage.setItem('sidebar_collapsed', isCollapsed);
 }
 </script>

@@ -5,6 +5,8 @@ class Pedido {
 
     public function __construct($db) {
         $this->db = $db;
+        // Auto-migración: garantiza que la columna exista sin necesitar script manual
+        $this->asegurarColumnaAutoEliminacion();
     }
 
     // ── KPIs ──────────────────────────────────────────────────────
@@ -59,7 +61,9 @@ class Pedido {
                 ep.nombre_estado                                     AS estado,
                 IFNULL(f.total_factura, 0)                          AS total,
                 p.fecha_pedido,
-                m.nombre_mesero                                      AS mesero
+                m.nombre_mesero                                      AS mesero,
+                p.direccion_entrega,
+                p.fecha_auto_eliminacion
             FROM pedido p
             JOIN estado_pedido ep  ON p.id_estado_pedido = ep.id_estado_pedido
             JOIN tipo_pedido   tp  ON p.id_tipo_pedido   = tp.id_tipo_pedido
@@ -122,7 +126,9 @@ class Pedido {
                 ep.id_estado_pedido,
                 IFNULL(f.total_factura, 0)          AS total,
                 p.fecha_pedido,
-                m.nombre_mesero                     AS mesero
+                m.nombre_mesero                     AS mesero,
+                p.direccion_entrega,
+                p.fecha_auto_eliminacion
             FROM pedido p
             JOIN estado_pedido ep  ON p.id_estado_pedido = ep.id_estado_pedido
             JOIN tipo_pedido   tp  ON p.id_tipo_pedido   = tp.id_tipo_pedido
@@ -165,9 +171,133 @@ class Pedido {
     // ── CAMBIAR ESTADO ────────────────────────────────────────────
 
     public function cambiarEstado($id_pedido, $id_estado_pedido) {
+        // updated_at se actualiza automáticamente (ON UPDATE CURRENT_TIMESTAMP)
+        // forzamos el toque con NOW() para compatibilidad si la columna no tiene ON UPDATE
         $stmt = $this->db->prepare("
-            UPDATE pedido SET id_estado_pedido = :estado WHERE id_pedido = :id
+            UPDATE pedido
+            SET id_estado_pedido = :estado,
+                updated_at = NOW()
+            WHERE id_pedido = :id
         ");
         return $stmt->execute([':estado' => $id_estado_pedido, ':id' => $id_pedido]);
+    }
+
+    // ── ELIMINACIÓN AUTOMÁTICA POR 7 DÍAS HÁBILES ─────────────────
+
+    /**
+     * Calcula la fecha de eliminación automática sumando 7 días hábiles
+     * (lunes a viernes) a partir de una fecha dada.
+     */
+    public static function calcularFechaEliminacion(string $fechaBase): string {
+        $fecha    = new DateTime($fechaBase);
+        $dias     = 0;
+        while ($dias < 7) {
+            $fecha->modify('+1 day');
+            $dow = (int)$fecha->format('N'); // 1=lun … 7=dom
+            if ($dow <= 5) { // lunes a viernes
+                $dias++;
+            }
+        }
+        return $fecha->format('Y-m-d');
+    }
+
+    /**
+     * Verifica si la columna fecha_auto_eliminacion existe en la tabla pedido.
+     * Si no existe, la crea automáticamente (auto-migración).
+     */
+    private function asegurarColumnaAutoEliminacion(): bool {
+        try {
+            // Verificar con INFORMATION_SCHEMA, sin tocar la tabla directamente
+            $stmt = $this->db->prepare("
+                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME   = 'pedido'
+                  AND COLUMN_NAME  = 'fecha_auto_eliminacion'
+            ");
+            $stmt->execute();
+            $existe = (int)$stmt->fetchColumn();
+
+            if ($existe === 0) {
+                $this->db->exec("ALTER TABLE pedido ADD COLUMN fecha_auto_eliminacion DATE DEFAULT NULL");
+                try {
+                    $this->db->exec("CREATE INDEX idx_pedido_autoelim ON pedido(fecha_auto_eliminacion)");
+                } catch (PDOException $ei) {
+                    // El índice ya puede existir — no es error fatal
+                }
+            }
+            return true;
+        } catch (PDOException $e) {
+            // No se pudo verificar ni crear — continuar sin auto-eliminación
+            return false;
+        }
+    }
+
+    /**
+     * Elimina en cascada todos los pedidos cuya fecha_auto_eliminacion ya venció.
+     * Solo borra pedidos con estado 'entregado' o 'cancelado'.
+     * Retorna la cantidad de pedidos eliminados.
+     */
+    public function ejecutarLimpiezaAutomatica(): int {
+        // Obtener ids a eliminar
+        $stmt = $this->db->prepare("
+            SELECT p.id_pedido
+            FROM pedido p
+            JOIN estado_pedido ep ON p.id_estado_pedido = ep.id_estado_pedido
+            WHERE ep.nombre_estado IN ('entregado', 'cancelado')
+              AND p.fecha_auto_eliminacion IS NOT NULL
+              AND p.fecha_auto_eliminacion <= CURDATE()
+        ");
+        $stmt->execute();
+        $ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        if (empty($ids)) return 0;
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        // Eliminar detalles, facturas y pedidos en cascada
+        $this->db->prepare("DELETE FROM detalle_pedido WHERE id_pedido IN ($placeholders)")
+                 ->execute($ids);
+        $this->db->prepare("DELETE FROM factura WHERE id_pedido IN ($placeholders)")
+                 ->execute($ids);
+        $this->db->prepare("DELETE FROM pedido WHERE id_pedido IN ($placeholders)")
+                 ->execute($ids);
+
+        return count($ids);
+    }
+
+    /**
+     * Asigna fecha_auto_eliminacion a pedidos entregados/cancelados que aún no la tienen.
+     * Se llama al cambiar estado o al cargar las vistas.
+     */
+    public function sincronizarFechasEliminacion(): void {
+        $stmt = $this->db->prepare("
+            SELECT p.id_pedido, p.fecha_pedido
+            FROM pedido p
+            JOIN estado_pedido ep ON p.id_estado_pedido = ep.id_estado_pedido
+            WHERE ep.nombre_estado IN ('entregado', 'cancelado')
+              AND p.fecha_auto_eliminacion IS NULL
+        ");
+        $stmt->execute();
+        $pendientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $update = $this->db->prepare("
+            UPDATE pedido SET fecha_auto_eliminacion = :fecha WHERE id_pedido = :id
+        ");
+        foreach ($pendientes as $row) {
+            $fechaElim = self::calcularFechaEliminacion($row['fecha_pedido']);
+            $update->execute([':fecha' => $fechaElim, ':id' => $row['id_pedido']]);
+        }
+    }
+
+    /**
+     * Retorna la fecha de eliminación de un pedido específico.
+     */
+    public function getFechaEliminacion(int $id_pedido): ?string {
+        $stmt = $this->db->prepare("
+            SELECT fecha_auto_eliminacion FROM pedido WHERE id_pedido = :id
+        ");
+        $stmt->execute([':id' => $id_pedido]);
+        $val = $stmt->fetchColumn();
+        return $val ?: null;
     }
 }

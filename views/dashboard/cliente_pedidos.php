@@ -1,6 +1,6 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) session_start();
-if (!isset($_SESSION['usuario']) || !in_array($_SESSION['usuario']['id_rol'], [3,'3','cliente'])) {
+if (!isset($_SESSION['usuario']) || !in_array($_SESSION['usuario']['id_rol'], [3,'3','cliente', 2,'2','empleado'])) {
     $_rProto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $_rHost  = $_SERVER['HTTP_HOST'];
     $_rBase  = rtrim(dirname(dirname(dirname($_SERVER['SCRIPT_NAME']))), '/');
@@ -38,10 +38,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
         $check->execute([':id'=>$id_pedido,':c'=>$id_cliente]);
 
         if ($check->fetch()) {
-            // Actualizar tipo
+            // Actualizar tipo y dirección
             if ($id_tipo) {
-                $db->prepare("UPDATE pedido SET id_tipo_pedido=:t WHERE id_pedido=:id")
-                   ->execute([':t'=>$id_tipo,':id'=>$id_pedido]);
+                $stmtTipo = $db->prepare("SELECT nombre_tipo FROM tipo_pedido WHERE id_tipo_pedido = :t");
+                $stmtTipo->execute([':t' => $id_tipo]);
+                $nombre_tipo = strtolower($stmtTipo->fetchColumn());
+
+                $direccion = null;
+                if (strpos($nombre_tipo, 'domicilio') !== false || strpos($nombre_tipo, 'delivery') !== false) {
+                    $direccion = isset($_POST['direccion_entrega']) ? trim($_POST['direccion_entrega']) : null;
+                }
+
+                $db->prepare("UPDATE pedido SET id_tipo_pedido=:t, direccion_entrega=:dir WHERE id_pedido=:id")
+                   ->execute([':t'=>$id_tipo, ':dir'=>$direccion, ':id'=>$id_pedido]);
             }
             // Actualizar cantidades
             foreach ($cantidades as $id_detalle => $cant) {
@@ -66,26 +75,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
         }
     }
 
-    if ($_POST['accion'] === 'eliminar_pedido' && $id_cliente) {
-        $id_pedido = (int)($_POST['id_pedido'] ?? 0);
-        // Solo puede eliminar pedidos cancelados o entregados
-        $check = $db->prepare("
-            SELECT p.id_pedido FROM pedido p
-            JOIN estado_pedido ep ON p.id_estado_pedido = ep.id_estado_pedido
-            WHERE p.id_pedido = :id AND p.id_cliente = :c
-              AND ep.nombre_estado IN ('cancelado','entregado')
-        ");
-        $check->execute([':id'=>$id_pedido, ':c'=>$id_cliente]);
-        if ($check->fetch()) {
-            // Eliminar detalle, factura y pedido
-            $db->prepare("DELETE FROM detalle_pedido WHERE id_pedido=:id")->execute([':id'=>$id_pedido]);
-            $db->prepare("DELETE FROM factura WHERE id_pedido=:id")->execute([':id'=>$id_pedido]);
-            $db->prepare("DELETE FROM pedido WHERE id_pedido=:id AND id_cliente=:c")->execute([':id'=>$id_pedido,':c'=>$id_cliente]);
-            $msg_ok = 'Pedido eliminado correctamente.';
-        } else {
-            $msg_err = 'Solo puedes eliminar pedidos cancelados o entregados.';
-        }
-    }
     if ($_POST['accion'] === 'cancelar_pedido' && $id_cliente) {
         $id_pedido = (int)($_POST['id_pedido'] ?? 0);
         $check = $db->prepare("
@@ -105,7 +94,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
             $msg_err = 'Solo puedes cancelar pedidos pendientes.';
         }
     }
-
     if ($_POST['accion'] === 'eliminar_detalle' && $id_cliente) {
         $id_pedido  = (int)($_POST['id_pedido']  ?? 0);
         $id_detalle = (int)($_POST['id_detalle'] ?? 0);
@@ -133,6 +121,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
         }
     }
 }
+
+// Limpieza automática de pedidos vencidos y sincronización de fechas
+require_once __DIR__ . '/../../models/Pedido.php';
+$_modelPedido = new Pedido($db);
+$_modelPedido->sincronizarFechasEliminacion();
+$_modelPedido->ejecutarLimpiezaAutomatica();
 
 // Filtros
 $filtro_estado = $_GET['estado'] ?? 'todos';
@@ -173,6 +167,8 @@ $stmtP = $db->prepare("
         ep.id_estado_pedido,
         tp.nombre_tipo          AS tipo,
         IFNULL(f.total_factura, 0) AS total,
+        p.direccion_entrega,
+        p.fecha_auto_eliminacion,
         (SELECT IFNULL(SUM(dp.cantidad),0) FROM detalle_pedido dp WHERE dp.id_pedido = p.id_pedido) AS num_items
     FROM pedido p
     JOIN estado_pedido ep ON p.id_estado_pedido = ep.id_estado_pedido
@@ -343,7 +339,7 @@ function tipoIcon($tipo) {
             $num = str_pad($p['id_pedido'],5,'0',STR_PAD_LEFT);
             $ico = tipoIcon($p['tipo']);
           ?>
-          <tr class="hover:bg-gray-50 transition">
+          <tr class="hover:bg-gray-50 transition" data-pedido-id="<?= $p['id_pedido'] ?>">
             <td class="px-5 py-4">
               <p class="font-bold text-gray-800 text-sm">#ORD-<?= $num ?></p>
               <p class="text-xs text-gray-400"><?= date('d/m/Y', strtotime($p['fecha_pedido'])) ?></p>
@@ -351,6 +347,12 @@ function tipoIcon($tipo) {
             <td class="px-5 py-4">
               <span class="text-lg"><?= $ico ?></span>
               <span class="text-xs text-gray-600 ml-1"><?= htmlspecialchars($p['tipo']) ?></span>
+              <?php if (!empty($p['direccion_entrega'])): ?>
+              <p class="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                <i class="fas fa-map-marker-alt text-retro-red text-xs"></i>
+                <?= htmlspecialchars($p['direccion_entrega']) ?>
+              </p>
+              <?php endif; ?>
             </td>
             <td class="px-5 py-4">
               <span class="text-sm text-gray-700">
@@ -366,11 +368,18 @@ function tipoIcon($tipo) {
               </span>
             </td>
             <td class="px-5 py-4">
-              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+              <span class="badge-estado-cli inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all duration-500"
                     style="background:<?= $b['bg'] ?>;color:<?= $b['color'] ?>;">
-                <span class="w-1.5 h-1.5 rounded-full" style="background:<?= $b['dot'] ?>;"></span>
-                <?= $b['label'] ?>
+                <span class="badge-dot-cli w-1.5 h-1.5 rounded-full" style="background:<?= $b['dot'] ?>;"></span>
+                <span class="badge-label-cli"><?= $b['label'] ?></span>
               </span>
+              <?php if (!empty($p['fecha_auto_eliminacion']) && in_array(strtolower($p['estado']), ['cancelado','entregado'])): ?>
+              <p class="text-xs text-gray-400 mt-1 flex items-center gap-1"
+                 title="Se eliminará automáticamente 7 días hábiles después de su fecha de pedido">
+                <i class="fas fa-clock text-xs"></i>
+                Expira <?= date('d/m/Y', strtotime($p['fecha_auto_eliminacion'])) ?>
+              </p>
+              <?php endif; ?>
             </td>
             <td class="px-5 py-4 text-center">
               <div class="flex items-center justify-center gap-2">
@@ -395,15 +404,13 @@ function tipoIcon($tipo) {
                   </button>
                 </form>
                 <?php elseif (in_array(strtolower($p['estado']), ['cancelado','entregado'])): ?>
-                <form method="POST" onsubmit="return confirm('¿Eliminar este pedido? No se puede deshacer.')" style="display:inline;">
-                  <input type="hidden" name="accion"    value="eliminar_pedido">
-                  <input type="hidden" name="id_pedido" value="<?= $p['id_pedido'] ?>">
-                  <button type="submit"
-                    class="w-8 h-8 rounded-lg bg-gray-100 hover:bg-red-100 text-gray-500 hover:text-red-600 transition flex items-center justify-center"
-                    title="Eliminar pedido">
-                    <i class="fas fa-trash text-xs"></i>
-                  </button>
-                </form>
+                <?php if (!empty($p['fecha_auto_eliminacion'])): ?>
+                <span class="inline-flex items-center gap-1 text-xs text-gray-400 font-body"
+                      title="Se eliminará automáticamente el <?= date('d/m/Y', strtotime($p['fecha_auto_eliminacion'])) ?>">
+                  <i class="fas fa-clock text-xs"></i>
+                  <?= date('d/m/Y', strtotime($p['fecha_auto_eliminacion'])) ?>
+                </span>
+                <?php endif; ?>
                 <?php endif; ?>
               </div>
             </td>
@@ -474,6 +481,16 @@ function tipoIcon($tipo) {
           <?php endforeach; ?>
         </div>
       </div>
+      
+      <!-- Dirección de entrega (oculta por defecto) -->
+      <div id="div-edit-direccion" class="hidden">
+        <label class="block text-sm font-bold text-gray-700 mb-1">
+          Dirección de entrega <span class="text-red-500">*</span>
+        </label>
+        <input type="text" name="direccion_entrega" id="edit-direccion-input"
+               class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-yellow-500 font-body text-sm bg-white"
+               placeholder="Ej: Calle 123 #45-67">
+      </div>
 
       <!-- Productos con cantidades -->
       <div>
@@ -524,6 +541,18 @@ function aplicarFecha(val) {
 }
 
 // ── Editar pedido ─────────────────────────────────────────────
+function toggleDireccionEdit(tipo) {
+  const divDir = document.getElementById('div-edit-direccion');
+  const inputDir = document.getElementById('edit-direccion-input');
+  if (tipo.toLowerCase().includes('domicilio') || tipo.toLowerCase().includes('delivery')) {
+    divDir.classList.remove('hidden');
+    inputDir.setAttribute('required', 'required');
+  } else {
+    divDir.classList.add('hidden');
+    inputDir.removeAttribute('required');
+  }
+}
+
 async function abrirEditar(id, tipoActual) {
   document.getElementById('edit_id_pedido').value = id;
   document.getElementById('edit-titulo').innerHTML =
@@ -550,6 +579,15 @@ async function abrirEditar(id, tipoActual) {
     const res  = await fetch('../../Controllers/PedidoDetalleCliente.php?id=' + id + '&modo=editar');
     const html = await res.text();
     cont.innerHTML = html;
+    
+    // Recuperar dirección
+    const wrapper = cont.querySelector('#edit-productos-wrapper');
+    const dir = wrapper ? wrapper.dataset.direccion : '';
+    const dirInput = document.getElementById('edit-direccion-input');
+    if (dirInput) {
+      dirInput.value = dir;
+    }
+    toggleDireccionEdit(tipoActual);
   } catch(e) {
     cont.innerHTML = '<p class="text-red-500 text-sm text-center py-4">Error al cargar productos.</p>';
   }
@@ -562,6 +600,9 @@ function selTipoEdit(el) {
   el.style.borderColor = '#EAB308';
   el.style.background  = '#FEFCE8';
   el.previousElementSibling.checked = true;
+  
+  const tipoNombre = el.previousElementSibling.dataset.nombre;
+  toggleDireccionEdit(tipoNombre);
 }
 
 function cambiarCantEdit(input, delta) {
@@ -631,6 +672,133 @@ function verDetalle(id) {
     .then(html => { body.innerHTML = html; })
     .catch(() => { body.innerHTML = '<p class="text-center text-red-500 py-8">Error al cargar el detalle.</p>'; });
 }
+
+// ── SSE — Sincronización en tiempo real (cliente) ───────────────────────────
+(function iniciarSSECliente() {
+  if (!window.EventSource) return;
+
+  <?php
+  // Obtener id_cliente para el SSE (ya está disponible en este contexto PHP)
+  $sseIdCliente = $id_cliente ? (int)$id_cliente : 0;
+  ?>
+  const idClienteSSE = <?= $sseIdCliente ?>;
+  if (!idClienteSSE) return;
+
+  const BADGE_CLI = {
+    pendiente:      { bg:'#FEF3C7', color:'#D97706', dot:'#F59E0B', label:'Pendiente',       icon:'⏳', msg:'Tu pedido está pendiente.' },
+    en_preparacion: { bg:'#DBEAFE', color:'#2563EB', dot:'#3B82F6', label:'En preparación', icon:'👨‍🍳', msg:'¡Tu pedido está siendo preparado!' },
+    listo:          { bg:'#D1FAE5', color:'#059669', dot:'#10B981', label:'Listo',            icon:'✅', msg:'¡Tu pedido está listo para recoger!' },
+    entregado:      { bg:'#EDE9FE', color:'#7C3AED', dot:'#8B5CF6', label:'Entregado',       icon:'🙌', msg:'¡Tu pedido fue entregado! ¡Buen provecho!' },
+    cancelado:      { bg:'#FEE2E2', color:'#DC2626', dot:'#EF4444', label:'Cancelado',       icon:'❌', msg:'Tu pedido fue cancelado.' },
+  };
+  const BADGE_CLI_DEFAULT = { bg:'#F3F4F6', color:'#6B7280', dot:'#9CA3AF', label:'Actualizado', icon:'🔄', msg:'Tu pedido fue actualizado.' };
+
+  // Container de toasts del cliente
+  const toastCtr = document.getElementById('toastCliente');
+
+  function mostrarToastCliente(orden, estado) {
+    const b  = BADGE_CLI[estado] || BADGE_CLI_DEFAULT;
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+      position:relative; display:flex; align-items:flex-start; gap:14px;
+      background:#fff; border-radius:18px; padding:16px 20px;
+      box-shadow:0 20px 60px rgba(0,0,0,.18), 0 4px 16px rgba(0,0,0,.08);
+      max-width:360px; min-width:280px;
+      border-left:5px solid ${b.color};
+      transform:translateX(120%); opacity:0;
+      transition: transform 0.45s cubic-bezier(.34,1.56,.64,1), opacity 0.35s ease;
+      pointer-events:auto;
+    `;
+    toast.innerHTML = `
+      <div style="font-size:28px;line-height:1;flex-shrink:0;">${b.icon}</div>
+      <div style="flex:1;min-width:0;">
+        <p style="font-weight:700;font-size:13px;color:#0a0a0a;margin:0 0 3px;">Pedido ${orden}</p>
+        <p style="font-size:12px;color:#555;margin:0 0 6px;">${b.msg}</p>
+        <span style="display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:20px;
+                     background:${b.bg};color:${b.color};font-size:11px;font-weight:700;">
+          <span style="width:6px;height:6px;border-radius:50%;background:${b.dot};display:inline-block;"></span>
+          ${b.label}
+        </span>
+      </div>
+      <button onclick="this.closest('div[style]').remove()" style="
+        position:absolute;top:10px;right:12px;
+        background:none;border:none;cursor:pointer;
+        font-size:14px;color:#aaa;padding:0;
+      ">✕</button>
+    `;
+    toastCtr.appendChild(toast);
+    requestAnimationFrame(() => {
+      toast.style.transform = 'translateX(0)';
+      toast.style.opacity   = '1';
+    });
+    setTimeout(() => {
+      toast.style.transform = 'translateX(120%)';
+      toast.style.opacity   = '0';
+      setTimeout(() => toast.remove(), 450);
+    }, 5000);
+  }
+
+  function actualizarBadgeCliente(idPedido, estado) {
+    const row = document.querySelector(`tr[data-pedido-id="${idPedido}"]`);
+    if (!row) return;
+    const b = BADGE_CLI[estado] || BADGE_CLI_DEFAULT;
+    const span = row.querySelector('.badge-estado-cli');
+    if (span) {
+      span.style.background = b.bg;
+      span.style.color      = b.color;
+      const dot = span.querySelector('.badge-dot-cli');
+      if (dot) dot.style.background = b.dot;
+      const lbl = span.querySelector('.badge-label-cli');
+      if (lbl) lbl.textContent = b.label;
+    }
+    row.style.transition = 'background 0.5s ease';
+    row.style.background = '#EFF6FF';
+    setTimeout(() => { row.style.background = ''; }, 2000);
+  }
+
+  const url = `../../Controllers/PedidoSSE.php?modo=cliente&id_cliente=${idClienteSSE}&desde=${Math.floor(Date.now()/1000)}`;
+  let es = null;
+  let reconectando = false;
+
+  function conectar() {
+    es = new EventSource(url);
+
+    es.addEventListener('pedido_actualizado', function(e) {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.cambios && data.cambios.length > 0) {
+          data.cambios.forEach(c => {
+            const numOrden = '#ORD-' + String(c.id_pedido).padStart(5,'0');
+            actualizarBadgeCliente(c.id_pedido, c.estado);
+            mostrarToastCliente(numOrden, c.estado);
+          });
+        }
+      } catch(err) { /* ignorar */ }
+    });
+
+    es.addEventListener('reconnect', function() {
+      es.close();
+      setTimeout(conectar, 1000);
+    });
+
+    es.onerror = function() {
+      es.close();
+      if (!reconectando) {
+        reconectando = true;
+        setTimeout(() => { reconectando = false; conectar(); }, 5000);
+      }
+    };
+  }
+
+  conectar();
+  window.addEventListener('beforeunload', () => { if (es) es.close(); });
+}());
 </script>
+
+<!-- Toast container para el cliente (fuera del script) -->
+<div id="toastCliente" style="
+  position:fixed; bottom:28px; right:24px; z-index:9999;
+  display:flex; flex-direction:column; gap:10px; pointer-events:none;
+"></div>
 
 <?php require_once __DIR__ . '/../layouts/footer.php'; ?>

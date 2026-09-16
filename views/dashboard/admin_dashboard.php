@@ -317,13 +317,13 @@ require_once __DIR__ . '/../layouts/sidebar.php';
                 <?php foreach ($pedidosRecientes as $p):
                     $b = DashboardController::badgeEstado($p['estado']);
                 ?>
-                <tr>
+                <tr data-pedido-id="<?php echo $p['id_pedido']; ?>">
                     <td style="font-weight:600;">#<?php echo $p['id_pedido']; ?></td>
                     <td><?php echo htmlspecialchars($p['nombre']); ?></td>
                     <td style="color:var(--muted);"><?php echo htmlspecialchars($p['lugar']); ?></td>
                     <td style="font-weight:600;">$<?php echo number_format($p['total']); ?></td>
                     <td>
-                        <span class="badge" style="color:<?php echo $b['color']; ?>;background:<?php echo $b['bg']; ?>;">
+                        <span class="badge dash-badge-estado" style="color:<?php echo $b['color']; ?>;background:<?php echo $b['bg']; ?>;">
                             <?php echo $b['label']; ?>
                         </span>
                     </td>
@@ -492,6 +492,71 @@ new Chart(document.getElementById('donutChart').getContext('2d'), {
         }
     }
 });
+</script>
+
+<div id="toastDash" style="position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;"></div>
+
+<script>
+// ── SSE Dashboard ───────────────────────────────────────────────────────────────
+const BADGE_DASH = {
+  pendiente:      { bg:'#FEF3C7', color:'#D97706', label:'Pendiente' },
+  en_preparacion: { bg:'#DBEAFE', color:'#2563EB', label:'En preparación' },
+  listo:          { bg:'#D1FAE5', color:'#059669', label:'Listo' },
+  entregado:      { bg:'#EDE9FE', color:'#7C3AED', label:'Entregado' },
+  completado:     { bg:'#EDE9FE', color:'#7C3AED', label:'Completado' },
+  cancelado:      { bg:'#FEE2E2', color:'#DC2626', label:'Cancelado' },
+};
+
+function toastDash(msg) {
+  const c = document.getElementById('toastDash');
+  const t = document.createElement('div');
+  t.style.cssText = 'pointer-events:auto;background:#0a0a0a;color:#c5a059;padding:10px 18px;border-radius:12px;font-size:12px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.3);opacity:0;transform:translateY(8px);transition:all .3s ease;';
+  t.textContent = msg;
+  c.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity='1'; t.style.transform='translateY(0)'; });
+  setTimeout(() => { t.style.opacity='0'; setTimeout(() => t.remove(), 350); }, 3000);
+}
+
+(function() {
+  if (!window.EventSource) return;
+  const url = `../../Controllers/PedidoSSE.php?modo=admin&desde=${Math.floor(Date.now()/1000)}`;
+  let es = null;
+  let reconectando = false;
+
+  function conectar() {
+    es = new EventSource(url);
+    es.addEventListener('pedido_actualizado', function(e) {
+      try {
+        const data = JSON.parse(e.data);
+        if (!data.cambios || !data.cambios.length) return;
+        data.cambios.forEach(c => {
+          const row = document.querySelector(`tr[data-pedido-id="${c.id_pedido}"]`);
+          if (!row) return;
+          const badge = row.querySelector('.dash-badge-estado');
+          const b = BADGE_DASH[c.estado] || { bg:'#F3F4F6', color:'#6B7280', label:c.estado };
+          if (badge) {
+            badge.style.background = b.bg;
+            badge.style.color      = b.color;
+            badge.textContent      = b.label;
+          }
+          row.style.transition = 'background .5s ease';
+          row.style.background = '#FFF8E7';
+          setTimeout(() => { row.style.background = ''; }, 2000);
+        });
+        const ords = data.cambios.map(c => '#' + c.id_pedido).join(', ');
+        toastDash('🔄 Pedido ' + ords + ' actualizado');
+      } catch(err) {}
+    });
+    es.addEventListener('reconnect', () => { es.close(); setTimeout(conectar,1000); });
+    es.onerror = () => {
+      es.close();
+      if (!reconectando) { reconectando = true; setTimeout(() => { reconectando=false; conectar(); }, 5000); }
+    };
+  }
+
+  conectar();
+  window.addEventListener('beforeunload', () => { if (es) es.close(); });
+}());
 </script>
 
 <?php require_once __DIR__ . '/../layouts/footer.php'; ?>

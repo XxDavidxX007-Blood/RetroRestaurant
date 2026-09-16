@@ -168,6 +168,12 @@ require_once __DIR__ . '/../layouts/sidebar.php';
             </td>
             <td class="px-5 py-4">
               <p class="font-semibold text-gray-800 text-sm"><?= htmlspecialchars($d['nombre_cliente'].' '.$d['apellidos_cliente']) ?></p>
+              <?php if (!empty($d['direccion_entrega'])): ?>
+              <p class="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                <i class="fas fa-map-marker-alt text-gray-400 text-xs"></i>
+                <?= htmlspecialchars($d['direccion_entrega']) ?>
+              </p>
+              <?php endif; ?>
             </td>
             <td class="px-5 py-4">
               <span class="text-sm text-gray-600 flex items-center gap-1">
@@ -280,6 +286,15 @@ require_once __DIR__ . '/../layouts/sidebar.php';
           <?php endforeach; ?>
         </select>
         <?php endif; ?>
+      </div>
+
+      <div>
+        <label class="block text-sm font-bold text-gray-700 mb-1">
+          Dirección de entrega <span class="text-red-500">*</span>
+        </label>
+        <input type="text" name="direccion_entrega" required
+          class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red font-body text-sm bg-white"
+          placeholder="Ej: Calle 123 #45-67">
       </div>
 
       <div>

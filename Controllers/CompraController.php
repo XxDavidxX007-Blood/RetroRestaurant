@@ -9,7 +9,7 @@ class CompraController {
     }
 
     // ── CREAR PEDIDO DESDE CARRITO ────────────────────────────────
-    public function procesarCompra($id_cliente, $carrito, $tipo = 'mesa') {
+    public function procesarCompra($id_cliente, $carrito, $tipo = 'mesa', $id_mesa = null, $direccion = null) {
         try {
             $this->db->beginTransaction();
 
@@ -27,19 +27,37 @@ class CompraController {
             $id_mesero = $this->db->query("SELECT id_mesero FROM mesero LIMIT 1")->fetchColumn();
             if (!$id_mesero) throw new Exception("No hay empleados registrados para asignar el pedido.");
 
+            // Validar mesa si aplica
+            $id_mesa_val = null;
+            if ($tipo === 'mesa' && $id_mesa) {
+                $chk = $this->db->prepare("SELECT id_mesa FROM mesa WHERE id_mesa = :id LIMIT 1");
+                $chk->execute([':id' => $id_mesa]);
+                if ($chk->fetchColumn()) $id_mesa_val = (int)$id_mesa;
+            }
+
+            // Dirección solo para domicilio
+            $dir_val = ($tipo === 'domicilio' && !empty($direccion)) ? trim($direccion) : null;
+
             // Insertar pedido
             $stmt = $this->db->prepare("
-                INSERT INTO pedido (id_cliente, id_mesero, id_tipo_pedido, fecha_pedido, id_estado_pedido)
-                VALUES (:ic, :im, :it, CURDATE(), :ie)
+                INSERT INTO pedido (id_cliente, id_mesa, direccion_entrega, id_mesero, id_tipo_pedido, fecha_pedido, id_estado_pedido)
+                VALUES (:ic, :im, :dir, :imes, :it, CURDATE(), :ie)
             ");
-            $stmt->execute([':ic'=>$id_cliente,':im'=>$id_mesero,':it'=>$id_tipo,':ie'=>$id_estado]);
+            $stmt->execute([
+                ':ic'   => $id_cliente,
+                ':im'   => $id_mesa_val,
+                ':dir'  => $dir_val,
+                ':imes' => $id_mesero,
+                ':it'   => $id_tipo,
+                ':ie'   => $id_estado,
+            ]);
             $id_pedido = $this->db->lastInsertId();
 
             // Insertar detalles y calcular total
             $total = 0;
             $stmtD = $this->db->prepare("
-                INSERT INTO detalle_pedido (id_pedido, id_producto, cantidad, precio_unitario, subtotal)
-                VALUES (:ip, :iprod, :cant, :pu, :sub)
+                INSERT INTO detalle_pedido (id_pedido, id_producto, cantidad, precio_unitario, subtotal, observacion)
+                VALUES (:ip, :iprod, :cant, :pu, :sub, :obs)
             ");
             foreach ($carrito as $item) {
                 $subtotal = $item['precio'] * $item['cantidad'];
@@ -50,6 +68,7 @@ class CompraController {
                     ':cant' => $item['cantidad'],
                     ':pu'   => $item['precio'],
                     ':sub'  => $subtotal,
+                    ':obs'  => !empty($item['observacion']) ? trim($item['observacion']) : null,
                 ]);
             }
 
@@ -112,7 +131,12 @@ class CompraController {
     public static function getNoLeidas($id_usuario) {
         try {
             $db = (new Database())->conectar();
-            return (int)$db->query("SELECT COUNT(*) FROM notificacion WHERE id_usuario_destino=$id_usuario AND leida=0")->fetchColumn();
+            return (int)$db->query("
+                SELECT COUNT(*) FROM notificacion
+                WHERE id_usuario_destino = $id_usuario
+                  AND leida = 0
+                  AND created_at >= NOW() - INTERVAL 3 DAY
+            ")->fetchColumn();
         } catch (Exception $e) {
             return 0;
         }
@@ -120,7 +144,14 @@ class CompraController {
 
     public static function getNotificaciones($id_usuario, $limite = 8) {
         try {
-            $db   = (new Database())->conectar();
+            $db = (new Database())->conectar();
+            // Limpiar notificaciones antiguas (> 3 días) antes de consultar
+            $db->prepare("
+                DELETE FROM notificacion
+                WHERE id_usuario_destino = :id
+                  AND created_at < NOW() - INTERVAL 3 DAY
+            ")->execute([':id' => $id_usuario]);
+
             $stmt = $db->prepare("
                 SELECT * FROM notificacion
                 WHERE id_usuario_destino = :id
@@ -140,6 +171,23 @@ class CompraController {
         try {
             $db = (new Database())->conectar();
             $db->prepare("UPDATE notificacion SET leida=1 WHERE id_usuario_destino=:id")->execute([':id'=>$id_usuario]);
+        } catch (Exception $e) {
+            // silencioso
+        }
+    }
+
+    /**
+     * Elimina notificaciones con más de 3 días de antigüedad para el usuario dado.
+     * Se ejecuta automáticamente al cargar notificaciones.
+     */
+    public static function limpiarAntiguas($id_usuario) {
+        try {
+            $db = (new Database())->conectar();
+            $db->prepare("
+                DELETE FROM notificacion
+                WHERE id_usuario_destino = :id
+                  AND created_at < NOW() - INTERVAL 3 DAY
+            ")->execute([':id' => $id_usuario]);
         } catch (Exception $e) {
             // silencioso
         }

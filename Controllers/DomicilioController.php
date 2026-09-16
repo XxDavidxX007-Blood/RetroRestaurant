@@ -30,10 +30,11 @@ class DomicilioController {
 
         if ($accion === 'crear') {
             $datos = [
-                'id_cliente'       => (int)($_POST['id_cliente'] ?? 0) ?: null,
-                'id_mesero'        => (int)($_POST['id_mesero']  ?? 0),
-                'fecha_pedido'     => $_POST['fecha_pedido']     ?? date('Y-m-d'),
-                'id_estado_pedido' => (int)($_POST['id_estado_pedido'] ?? 1),
+                'id_cliente'        => (int)($_POST['id_cliente'] ?? 0) ?: null,
+                'id_mesero'         => (int)($_POST['id_mesero']  ?? 0),
+                'fecha_pedido'      => $_POST['fecha_pedido']     ?? date('Y-m-d'),
+                'id_estado_pedido'  => (int)($_POST['id_estado_pedido'] ?? 1),
+                'direccion_entrega' => isset($_POST['direccion_entrega']) ? trim($_POST['direccion_entrega']) : null,
             ];
             $r = $this->model->crear($datos);
             if ($r === true) header("Location: " . $this->baseUrl() . "/admin_domicilios.php?success=creado");

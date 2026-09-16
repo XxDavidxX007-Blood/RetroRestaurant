@@ -1,6 +1,6 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) session_start();
-if (!isset($_SESSION['usuario']) || !in_array($_SESSION['usuario']['id_rol'], [3,'3','cliente'])) {
+if (!isset($_SESSION['usuario']) || !in_array($_SESSION['usuario']['id_rol'], [3,'3','cliente', 2,'2','empleado'])) {
     http_response_code(403); echo '<p class="text-red-500 text-center py-4">Acceso denegado.</p>'; exit;
 }
 
@@ -18,7 +18,8 @@ $id_cliente = $rowC ? $rowC['id_cliente'] : null;
 
 $stmtP = $db->prepare("
     SELECT p.id_pedido, p.fecha_pedido, ep.nombre_estado AS estado,
-           tp.nombre_tipo AS tipo, IFNULL(f.total_factura,0) AS total
+           tp.nombre_tipo AS tipo, IFNULL(f.total_factura,0) AS total,
+           p.direccion_entrega
     FROM pedido p
     JOIN estado_pedido ep ON p.id_estado_pedido = ep.id_estado_pedido
     JOIN tipo_pedido   tp ON p.id_tipo_pedido   = tp.id_tipo_pedido
@@ -30,7 +31,7 @@ $pedido = $stmtP->fetch(PDO::FETCH_ASSOC);
 if (!$pedido) { echo '<p class="text-gray-500 text-center py-8">Pedido no encontrado.</p>'; exit; }
 
 $stmtD = $db->prepare("
-    SELECT dp.id_detalle, dp.cantidad, dp.precio_unitario, dp.subtotal, pr.nombre
+    SELECT dp.id_detalle, dp.cantidad, dp.precio_unitario, dp.subtotal, dp.observacion, pr.nombre
     FROM detalle_pedido dp
     JOIN producto pr ON dp.id_producto = pr.id_producto
     WHERE dp.id_pedido = :id
@@ -46,7 +47,7 @@ if ($modo === 'editar') {
         exit;
     }
     ?>
-    <div class="space-y-3 font-body text-sm">
+    <div id="edit-productos-wrapper" data-direccion="<?= htmlspecialchars($pedido['direccion_entrega'] ?? '') ?>" class="space-y-3 font-body text-sm">
       <?php if (empty($detalle)): ?>
       <p class="text-gray-400 text-center py-4">Sin productos.</p>
       <?php else: ?>
@@ -56,6 +57,11 @@ if ($modo === 'editar') {
            data-pedido="<?= $id ?>">
         <div class="flex-1 min-w-0">
           <p class="font-semibold text-gray-800 truncate"><?= htmlspecialchars($item['nombre']) ?></p>
+          <?php if (!empty($item['observacion'])): ?>
+          <p class="text-xs text-amber-600 italic truncate">
+            <i class="fas fa-info-circle mr-1"></i><?= htmlspecialchars($item['observacion']) ?>
+          </p>
+          <?php endif; ?>
           <p class="text-xs text-gray-400">
             $<?= number_format($item['precio_unitario'],0,',','.') ?> c/u
             · Total: <span class="sub-display font-semibold text-gray-700">
@@ -118,6 +124,12 @@ $b   = $badges[$key] ?? ['bg'=>'#F3F4F6','color'=>'#6B7280'];
         <?= ucfirst(str_replace('_',' ',$pedido['estado'])) ?>
       </span>
     </div>
+    <?php if (!empty($pedido['direccion_entrega'])): ?>
+    <div class="bg-gray-50 rounded-xl p-4 col-span-2">
+      <p class="text-xs text-gray-400 mb-1">Dirección de entrega</p>
+      <p class="font-semibold text-gray-800"><?= htmlspecialchars($pedido['direccion_entrega']) ?></p>
+    </div>
+    <?php endif; ?>
   </div>
   <div>
     <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Productos</p>
@@ -136,7 +148,14 @@ $b   = $badges[$key] ?? ['bg'=>'#F3F4F6','color'=>'#6B7280'];
         <tbody class="divide-y divide-gray-50">
           <?php foreach ($detalle as $item): ?>
           <tr>
-            <td class="px-4 py-3 text-gray-700"><?= htmlspecialchars($item['nombre']) ?></td>
+            <td class="px-4 py-3 text-gray-700">
+              <?= htmlspecialchars($item['nombre']) ?>
+              <?php if (!empty($item['observacion'])): ?>
+              <p class="text-xs text-amber-600 italic mt-0.5">
+                <i class="fas fa-info-circle mr-1"></i><?= htmlspecialchars($item['observacion']) ?>
+              </p>
+              <?php endif; ?>
+            </td>
             <td class="px-4 py-3 text-center text-gray-600"><?= $item['cantidad'] ?></td>
             <td class="px-4 py-3 text-right font-semibold text-gray-800">
               $<?= number_format($item['subtotal'],0,',','.') ?>

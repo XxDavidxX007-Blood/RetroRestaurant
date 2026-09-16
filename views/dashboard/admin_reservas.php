@@ -267,8 +267,9 @@ require_once __DIR__ . '/../layouts/sidebar.php';
       <h3 class="text-xl font-heading font-bold text-gray-800"><i class="fas fa-plus text-retro-red mr-2"></i>Nueva Reserva</h3>
       <button onclick="document.getElementById('modalCrear').classList.add('hidden')" class="text-gray-400 hover:text-red-500 transition"><i class="fas fa-times text-lg"></i></button>
     </div>
-    <form action="admin_reservas.php" method="POST" class="p-6 space-y-4">
+    <form action="admin_reservas.php" method="POST" id="formAdminCrear" class="p-6 space-y-4">
       <input type="hidden" name="accion" value="crear">
+      <input type="hidden" name="id_mesa" id="admin_crear_id_mesa">
       <div class="grid grid-cols-2 gap-4">
         <div class="col-span-2">
           <label class="block text-sm font-bold text-gray-700 mb-1">Cliente</label>
@@ -280,33 +281,55 @@ require_once __DIR__ . '/../layouts/sidebar.php';
           </select>
         </div>
         <div>
-          <label class="block text-sm font-bold text-gray-700 mb-1">Mesa</label>
-          <select name="id_mesa" required class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red bg-white font-body text-sm">
-            <option value="">Seleccione...</option>
-            <?php foreach ($mesas as $m): ?>
-            <option value="<?= $m['id_mesa'] ?>">Mesa <?= $m['numero_mesa'] ?> (cap. <?= $m['capacidad'] ?>)</option>
-            <?php endforeach; ?>
-          </select>
+          <label class="block text-sm font-bold text-gray-700 mb-1">Fecha</label>
+          <input type="date" name="fecha_reserva" id="admin_crear_fecha" required value="<?= date('Y-m-d') ?>"
+                 onchange="actualizarDisponibilidadAdmin('crear')"
+                 class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red font-body text-sm">
+        </div>
+        <div>
+          <label class="block text-sm font-bold text-gray-700 mb-1">Hora</label>
+          <input type="time" name="hora_reserva" id="admin_crear_hora" required value="12:00"
+                 onchange="actualizarDisponibilidadAdmin('crear')"
+                 class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red font-body text-sm">
         </div>
         <div>
           <label class="block text-sm font-bold text-gray-700 mb-1">Personas</label>
           <input type="number" name="numero_personas" min="1" value="2" required class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red font-body text-sm">
         </div>
         <div>
-          <label class="block text-sm font-bold text-gray-700 mb-1">Fecha</label>
-          <input type="date" name="fecha_reserva" required value="<?= date('Y-m-d') ?>" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red font-body text-sm">
-        </div>
-        <div>
-          <label class="block text-sm font-bold text-gray-700 mb-1">Hora</label>
-          <input type="time" name="hora_reserva" required value="12:00" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red font-body text-sm">
-        </div>
-        <div class="col-span-2">
           <label class="block text-sm font-bold text-gray-700 mb-1">Estado</label>
           <select name="id_estado_reserva" required class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red bg-white font-body text-sm">
             <?php foreach ($estados as $e): ?>
             <option value="<?= $e['id_estado_reserva'] ?>"><?= ucfirst($e['nombre_estado']) ?></option>
             <?php endforeach; ?>
           </select>
+        </div>
+
+        <!-- Selector visual de mesas -->
+        <div class="col-span-2">
+          <label class="block text-sm font-bold text-gray-700 mb-2">
+            Mesa <span class="text-red-500">*</span>
+            <span class="text-xs font-normal text-gray-400 ml-1">— las rojas ya tienen reserva en ese horario</span>
+          </label>
+          <div class="flex items-center gap-4 mb-2 text-xs font-body text-gray-500">
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-green-400 inline-block"></span> Disponible</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-red-400 inline-block"></span> Ocupada</span>
+          </div>
+          <div id="mesas_admin_crear" class="grid grid-cols-4 gap-2 max-h-44 overflow-y-auto pr-1">
+            <?php foreach ($mesas as $m): ?>
+            <button type="button"
+              data-id="<?= $m['id_mesa'] ?>"
+              data-cap="<?= $m['capacidad'] ?>"
+              data-num="<?= $m['numero_mesa'] ?>"
+              onclick="seleccionarMesaAdmin(this,'crear')"
+              class="admin-mesa-btn relative flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-gray-200 bg-white hover:border-retro-red transition text-sm font-body cursor-pointer text-center">
+              <i class="fas fa-chair text-gray-400 text-base"></i>
+              <span class="font-bold text-gray-700 text-xs">Mesa <?= $m['numero_mesa'] ?></span>
+              <span class="text-xs text-gray-400">Cap. <?= $m['capacidad'] ?></span>
+            </button>
+            <?php endforeach; ?>
+          </div>
+          <div id="admin_crear_mesa_error" class="text-red-500 text-xs mt-1 hidden">Selecciona una mesa disponible.</div>
         </div>
       </div>
       <div class="flex justify-end gap-3 pt-2">
@@ -325,37 +348,61 @@ require_once __DIR__ . '/../layouts/sidebar.php';
       <h3 class="text-xl font-heading font-bold text-gray-800"><i class="fas fa-pen text-blue-500 mr-2"></i>Editar Reserva</h3>
       <button onclick="document.getElementById('modalEditar').classList.add('hidden')" class="text-gray-400 hover:text-red-500 transition"><i class="fas fa-times text-lg"></i></button>
     </div>
-    <form action="admin_reservas.php" method="POST" class="p-6 space-y-4">
+    <form action="admin_reservas.php" method="POST" id="formAdminEditar" class="p-6 space-y-4">
       <input type="hidden" name="accion" value="editar">
       <input type="hidden" name="id_reserva" id="edit_id">
+      <input type="hidden" name="id_mesa" id="admin_edit_id_mesa">
       <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-bold text-gray-700 mb-1">Mesa</label>
-          <select name="id_mesa" id="edit_mesa" required class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red bg-white font-body text-sm">
-            <?php foreach ($mesas as $m): ?>
-            <option value="<?= $m['id_mesa'] ?>">Mesa <?= $m['numero_mesa'] ?> (cap. <?= $m['capacidad'] ?>)</option>
-            <?php endforeach; ?>
-          </select>
-        </div>
         <div>
           <label class="block text-sm font-bold text-gray-700 mb-1">Personas</label>
           <input type="number" name="numero_personas" id="edit_personas" min="1" required class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red font-body text-sm">
         </div>
         <div>
-          <label class="block text-sm font-bold text-gray-700 mb-1">Fecha</label>
-          <input type="date" name="fecha_reserva" id="edit_fecha" required class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red font-body text-sm">
-        </div>
-        <div>
-          <label class="block text-sm font-bold text-gray-700 mb-1">Hora</label>
-          <input type="time" name="hora_reserva" id="edit_hora" required class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red font-body text-sm">
-        </div>
-        <div class="col-span-2">
           <label class="block text-sm font-bold text-gray-700 mb-1">Estado</label>
           <select name="id_estado_reserva" id="edit_estado" required class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red bg-white font-body text-sm">
             <?php foreach ($estados as $e): ?>
             <option value="<?= $e['id_estado_reserva'] ?>"><?= ucfirst($e['nombre_estado']) ?></option>
             <?php endforeach; ?>
           </select>
+        </div>
+        <div>
+          <label class="block text-sm font-bold text-gray-700 mb-1">Fecha</label>
+          <input type="date" name="fecha_reserva" id="edit_fecha" required
+                 onchange="actualizarDisponibilidadAdmin('editar')"
+                 class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red font-body text-sm">
+        </div>
+        <div>
+          <label class="block text-sm font-bold text-gray-700 mb-1">Hora</label>
+          <input type="time" name="hora_reserva" id="edit_hora" required
+                 onchange="actualizarDisponibilidadAdmin('editar')"
+                 class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red font-body text-sm">
+        </div>
+
+        <!-- Selector visual de mesas (editar admin) -->
+        <div class="col-span-2">
+          <label class="block text-sm font-bold text-gray-700 mb-2">
+            Mesa <span class="text-red-500">*</span>
+            <span class="text-xs font-normal text-gray-400 ml-1">— las rojas ya están reservadas en ese horario</span>
+          </label>
+          <div class="flex items-center gap-4 mb-2 text-xs font-body text-gray-500">
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-green-400 inline-block"></span> Disponible</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-red-400 inline-block"></span> Ocupada</span>
+          </div>
+          <div id="mesas_admin_editar" class="grid grid-cols-4 gap-2 max-h-44 overflow-y-auto pr-1">
+            <?php foreach ($mesas as $m): ?>
+            <button type="button"
+              data-id="<?= $m['id_mesa'] ?>"
+              data-cap="<?= $m['capacidad'] ?>"
+              data-num="<?= $m['numero_mesa'] ?>"
+              onclick="seleccionarMesaAdmin(this,'editar')"
+              class="admin-mesa-btn relative flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-gray-200 bg-white hover:border-retro-red transition text-sm font-body cursor-pointer text-center">
+              <i class="fas fa-chair text-gray-400 text-base"></i>
+              <span class="font-bold text-gray-700 text-xs">Mesa <?= $m['numero_mesa'] ?></span>
+              <span class="text-xs text-gray-400">Cap. <?= $m['capacidad'] ?></span>
+            </button>
+            <?php endforeach; ?>
+          </div>
+          <div id="admin_editar_mesa_error" class="text-red-500 text-xs mt-1 hidden">Selecciona una mesa disponible.</div>
         </div>
       </div>
       <div class="flex justify-end gap-3 pt-2">
@@ -394,27 +441,144 @@ function aplicarFecha(val) {
   url.searchParams.set('pagina', 1);
   window.location.href = url.toString();
 }
-function abrirEditar(r) {
-  document.getElementById('edit_id').value       = r.id_reserva;
-  document.getElementById('edit_personas').value = r.numero_personas;
-  document.getElementById('edit_fecha').value    = r.fecha_reserva;
-  document.getElementById('edit_hora').value     = r.hora_reserva.substring(0,5);
-  // Mesa
-  const sm = document.getElementById('edit_mesa');
-  for (let i=0;i<sm.options.length;i++) {
-    if (sm.options[i].text.startsWith('Mesa '+r.numero_mesa)) { sm.selectedIndex=i; break; }
-  }
-  // Estado
-  const se = document.getElementById('edit_estado');
-  for (let i=0;i<se.options.length;i++) {
-    if (se.options[i].value == r.id_estado_reserva) { se.selectedIndex=i; break; }
-  }
-  document.getElementById('modalEditar').classList.remove('hidden');
+
+// ── Selección visual de mesa (admin) ─────────────────────────────────────────
+function seleccionarMesaAdmin(btn, ctx) {
+  if (btn.dataset.ocupada === '1') return;
+  const container = document.getElementById('mesas_admin_' + ctx);
+  container.querySelectorAll('.admin-mesa-btn').forEach(b => {
+    b.classList.remove('border-retro-red', 'bg-red-50', 'admin-mesa-seleccionada');
+  });
+  btn.classList.add('border-retro-red', 'bg-red-50', 'admin-mesa-seleccionada');
+  document.getElementById(ctx === 'crear' ? 'admin_crear_id_mesa' : 'admin_edit_id_mesa').value = btn.dataset.id;
+  document.getElementById('admin_' + ctx + '_mesa_error').classList.add('hidden');
 }
+
+// ── Consultar disponibilidad vía AJAX (admin) ─────────────────────────────────
+function actualizarDisponibilidadAdmin(ctx) {
+  const fecha     = document.getElementById(ctx === 'crear' ? 'admin_crear_fecha' : 'edit_fecha').value;
+  const hora      = document.getElementById(ctx === 'crear' ? 'admin_crear_hora'  : 'edit_hora').value;
+  const reservaId  = ctx === 'editar' ? document.getElementById('edit_id').value : null;
+  const mesaActual = ctx === 'editar' ? document.getElementById('admin_edit_id_mesa').value : null;
+
+  if (!fecha || !hora) return;
+
+  const container = document.getElementById('mesas_admin_' + ctx);
+
+  const base = window.location.pathname.split('/views/')[0];
+  fetch(`${base}/Controllers/ReservaDisponibilidadController.php?fecha=${encodeURIComponent(fecha)}&hora=${encodeURIComponent(hora)}&excluir=${reservaId || ''}`)
+    .then(r => r.json())
+    .then(data => {
+      container.querySelectorAll('.admin-mesa-btn').forEach(btn => {
+        const id   = btn.dataset.id;
+        const info = data[id];
+        const ocupada = info && info.ocupada == '1';
+        btn.dataset.ocupada = ocupada ? '1' : '0';
+
+        if (ocupada) {
+          btn.classList.remove('border-gray-200','border-retro-red','bg-white','bg-red-50','admin-mesa-seleccionada','hover:border-retro-red','cursor-pointer');
+          btn.classList.add('border-red-300','bg-red-50','cursor-not-allowed','opacity-70');
+          btn.querySelector('i').className = 'fas fa-lock text-red-400 text-base';
+          if (!btn.querySelector('.admin-ocupada-label')) {
+            const sp = document.createElement('span');
+            sp.className = 'admin-ocupada-label text-xs font-bold text-red-500';
+            sp.textContent = 'Ocupada';
+            btn.appendChild(sp);
+          }
+          if (ctx === 'editar' && mesaActual === id) document.getElementById('admin_edit_id_mesa').value = '';
+          if (ctx === 'crear'  && document.getElementById('admin_crear_id_mesa').value === id) document.getElementById('admin_crear_id_mesa').value = '';
+        } else {
+          btn.classList.remove('border-red-300','cursor-not-allowed','opacity-70');
+          btn.classList.add('border-gray-200','hover:border-retro-red','cursor-pointer');
+          btn.querySelector('i').className = 'fas fa-chair text-gray-400 text-base';
+          const lbl = btn.querySelector('.admin-ocupada-label');
+          if (lbl) lbl.remove();
+          btn.dataset.ocupada = '0';
+          if (ctx === 'editar' && mesaActual === id) seleccionarMesaAdmin(btn, ctx);
+        }
+      });
+    })
+    .catch(() => {});
+}
+
+// ── Validación al enviar ──────────────────────────────────────────────────────
+document.getElementById('formAdminCrear').addEventListener('submit', function(e) {
+  if (!document.getElementById('admin_crear_id_mesa').value) {
+    e.preventDefault();
+    document.getElementById('admin_crear_mesa_error').classList.remove('hidden');
+  }
+});
+document.getElementById('formAdminEditar').addEventListener('submit', function(e) {
+  if (!document.getElementById('admin_edit_id_mesa').value) {
+    e.preventDefault();
+    document.getElementById('admin_editar_mesa_error').classList.remove('hidden');
+  }
+});
+
+// ── Abrir modal editar ────────────────────────────────────────────────────────
+function abrirEditar(r) {
+  document.getElementById('edit_id').value           = r.id_reserva;
+  document.getElementById('edit_personas').value     = r.numero_personas;
+  document.getElementById('edit_fecha').value        = r.fecha_reserva;
+  document.getElementById('edit_hora').value         = r.hora_reserva.substring(0,5);
+  document.getElementById('admin_edit_id_mesa').value = r.id_mesa || '';
+
+  const se = document.getElementById('edit_estado');
+  for (let i = 0; i < se.options.length; i++) {
+    if (se.options[i].value == r.id_estado_reserva) { se.selectedIndex = i; break; }
+  }
+
+  document.getElementById('modalEditar').classList.remove('hidden');
+
+  // Cargar disponibilidad y marcar mesa actual
+  const base = window.location.pathname.split('/views/')[0];
+  fetch(`${base}/Controllers/ReservaDisponibilidadController.php?fecha=${encodeURIComponent(r.fecha_reserva)}&hora=${encodeURIComponent(r.hora_reserva.substring(0,5))}&excluir=${r.id_reserva}`)
+    .then(res => res.json())
+    .then(data => {
+      const container = document.getElementById('mesas_admin_editar');
+      container.querySelectorAll('.admin-mesa-btn').forEach(btn => {
+        const id   = btn.dataset.id;
+        const info = data[id];
+        const ocupada = info && info.ocupada == '1';
+        btn.dataset.ocupada = ocupada ? '1' : '0';
+
+        if (ocupada) {
+          btn.classList.remove('border-gray-200','border-retro-red','bg-white','bg-red-50','admin-mesa-seleccionada','hover:border-retro-red','cursor-pointer');
+          btn.classList.add('border-red-300','bg-red-50','cursor-not-allowed','opacity-70');
+          btn.querySelector('i').className = 'fas fa-lock text-red-400 text-base';
+          if (!btn.querySelector('.admin-ocupada-label')) {
+            const sp = document.createElement('span');
+            sp.className = 'admin-ocupada-label text-xs font-bold text-red-500';
+            sp.textContent = 'Ocupada';
+            btn.appendChild(sp);
+          }
+        } else {
+          btn.classList.remove('border-red-300','cursor-not-allowed','opacity-70');
+          btn.classList.add('border-gray-200','hover:border-retro-red','cursor-pointer');
+          btn.querySelector('i').className = 'fas fa-chair text-gray-400 text-base';
+          const lbl = btn.querySelector('.admin-ocupada-label');
+          if (lbl) lbl.remove();
+          if (id == r.id_mesa) seleccionarMesaAdmin(btn, 'editar');
+        }
+      });
+    })
+    .catch(() => {
+      const container = document.getElementById('mesas_admin_editar');
+      container.querySelectorAll('.admin-mesa-btn').forEach(btn => {
+        if (btn.dataset.id == r.id_mesa) seleccionarMesaAdmin(btn, 'editar');
+      });
+    });
+}
+
 function abrirEliminar(id) {
   document.getElementById('del_id').value = id;
   document.getElementById('modalEliminar').classList.remove('hidden');
 }
+
+// Cargar disponibilidad al abrir el modal crear
+document.querySelector('[onclick*="modalCrear"]')?.addEventListener('click', function() {
+  setTimeout(() => actualizarDisponibilidadAdmin('crear'), 100);
+});
 </script>
 
 <?php require_once __DIR__ . '/../layouts/footer.php'; ?>

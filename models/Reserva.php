@@ -118,7 +118,73 @@ class Reserva {
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Verifica si una mesa ya tiene una reserva activa (pendiente o confirmada)
+     * en la misma fecha y hora. Excluye la reserva actual si se está editando.
+     *
+     * @param int    $id_mesa       ID de la mesa a verificar
+     * @param string $fecha_reserva Fecha en formato Y-m-d
+     * @param string $hora_reserva  Hora en formato H:i o H:i:s
+     * @param int    $excluir_id    ID de reserva a excluir (para ediciones)
+     * @return bool  true si la mesa está ocupada (no disponible)
+     */
+    public function esMesaOcupada($id_mesa, $fecha_reserva, $hora_reserva, $excluir_id = null) {
+        $sql = "
+            SELECT COUNT(*) FROM reserva r
+            JOIN estado_reserva er ON r.id_estado_reserva = er.id_estado_reserva
+            WHERE r.id_mesa        = :id_mesa
+              AND r.fecha_reserva  = :fecha
+              AND r.hora_reserva   = :hora
+              AND er.nombre_estado NOT IN ('cancelada', 'completada', 'no asistio')
+        ";
+        $params = [
+            ':id_mesa' => $id_mesa,
+            ':fecha'   => $fecha_reserva,
+            ':hora'    => $hora_reserva,
+        ];
+        if ($excluir_id) {
+            $sql .= " AND r.id_reserva != :excluir";
+            $params[':excluir'] = $excluir_id;
+        }
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn() > 0;
+    }
+
+    /**
+     * Devuelve todas las mesas con su disponibilidad para una fecha y hora dadas.
+     * Las mesas con reservas activas se marcan como ocupadas.
+     */
+    public function getMesasConDisponibilidad($fecha, $hora) {
+        $stmt = $this->db->prepare("
+            SELECT
+                m.id_mesa,
+                m.numero_mesa,
+                m.capacidad,
+                m.estado AS estado_mesa,
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1 FROM reserva r
+                        JOIN estado_reserva er ON r.id_estado_reserva = er.id_estado_reserva
+                        WHERE r.id_mesa       = m.id_mesa
+                          AND r.fecha_reserva = :fecha
+                          AND r.hora_reserva  = :hora
+                          AND er.nombre_estado NOT IN ('cancelada','completada','no asistio')
+                    ) THEN 1
+                    ELSE 0
+                END AS ocupada
+            FROM mesa m
+            ORDER BY m.numero_mesa
+        ");
+        $stmt->execute([':fecha' => $fecha, ':hora' => $hora]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public function crear($datos) {
+        // Validar disponibilidad antes de insertar
+        if ($this->esMesaOcupada($datos['id_mesa'], $datos['fecha_reserva'], $datos['hora_reserva'])) {
+            return 'La mesa seleccionada ya tiene una reserva activa en esa fecha y hora.';
+        }
         try {
             $stmt = $this->db->prepare("
                 INSERT INTO reserva (id_cliente, id_mesa, fecha_reserva, hora_reserva, numero_personas, id_estado_reserva)
@@ -137,6 +203,10 @@ class Reserva {
     }
 
     public function actualizar($id, $datos) {
+        // Validar disponibilidad excluyendo la reserva que se está editando
+        if ($this->esMesaOcupada($datos['id_mesa'], $datos['fecha_reserva'], $datos['hora_reserva'], $id)) {
+            return 'La mesa seleccionada ya tiene una reserva activa en esa fecha y hora.';
+        }
         try {
             $stmt = $this->db->prepare("
                 UPDATE reserva SET

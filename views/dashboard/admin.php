@@ -95,12 +95,14 @@ require_once __DIR__ . '/../layouts/sidebar.php';
                         <th class="p-4">Email</th>
                         <th class="p-4">Teléfono</th>
                         <th class="p-4">Rol</th>
+                        <th class="p-4">Estado</th>
                         <th class="p-4 text-center rounded-tr-lg">Acciones</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 font-body text-gray-600">
                     <?php foreach ($usuarios as $u): ?>
-                    <tr class="hover:bg-gray-50 transition">
+                    <?php $activo = !isset($u['activo']) || $u['activo'] == 1; ?>
+                    <tr class="hover:bg-gray-50 transition <?= !$activo ? 'opacity-60' : '' ?>">
                         <td class="p-4">
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 border border-gray-300">
@@ -113,28 +115,69 @@ require_once __DIR__ . '/../layouts/sidebar.php';
                         <td class="p-4"><?= htmlspecialchars($u['telefono']) ?></td>
                         <td class="p-4">
                             <?php 
-                            $rolBadge = '';
                             if (in_array($u['id_rol'], ['1', 1, 'administrador'])) {
-                                $rolBadge = '<span class="bg-red-100 text-red-800 text-xs font-bold px-3 py-1 rounded-full border border-red-200">Admin</span>';
+                                echo '<span class="bg-red-100 text-red-800 text-xs font-bold px-3 py-1 rounded-full border border-red-200">Admin</span>';
                             } elseif (in_array($u['id_rol'], ['2', 2, 'empleado'])) {
-                                $rolBadge = '<span class="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full border border-blue-200">Empleado</span>';
+                                echo '<span class="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full border border-blue-200">Empleado</span>';
                             } else {
-                                $rolBadge = '<span class="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full border border-green-200">Cliente</span>';
+                                echo '<span class="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full border border-green-200">Cliente</span>';
                             }
-                            echo $rolBadge;
                             ?>
                         </td>
-                        <td class="p-4 text-center">
-                            <button type="button" onclick="openEditModal(<?= htmlspecialchars(json_encode($u)) ?>)" class="w-10 h-10 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-colors shadow-sm border border-blue-200" title="Editar">
-                                <i class="fas fa-pen"></i>
-                            </button>
+                        <td class="p-4">
+                            <?php if ($activo): ?>
+                                <span class="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full border border-green-200">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Activo
+                                </span>
+                            <?php else: ?>
+                                <span class="inline-flex items-center gap-1.5 bg-gray-100 text-gray-500 text-xs font-bold px-3 py-1 rounded-full border border-gray-200">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span> Inactivo
+                                </span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="p-4">
+                            <div class="flex items-center justify-center gap-2">
+                                <!-- Editar -->
+                                <button type="button"
+                                    onclick="openEditModal(<?= htmlspecialchars(json_encode($u)) ?>)"
+                                    class="w-9 h-9 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition shadow-sm border border-blue-200"
+                                    title="Editar">
+                                    <i class="fas fa-pen text-xs"></i>
+                                </button>
+
+                                <?php if ($activo): ?>
+                                <!-- Deshabilitar -->
+                                <button type="button"
+                                    onclick="confirmarAccion('deshabilitar', <?= $u['id_usuario'] ?>, '<?= htmlspecialchars(addslashes($u['nombre'].' '.$u['apellidos'])) ?>')"
+                                    class="w-9 h-9 rounded-full bg-yellow-50 text-yellow-600 hover:bg-yellow-500 hover:text-white transition shadow-sm border border-yellow-200"
+                                    title="Deshabilitar">
+                                    <i class="fas fa-ban text-xs"></i>
+                                </button>
+                                <?php else: ?>
+                                <!-- Activar -->
+                                <button type="button"
+                                    onclick="confirmarAccion('activar', <?= $u['id_usuario'] ?>, '<?= htmlspecialchars(addslashes($u['nombre'].' '.$u['apellidos'])) ?>')"
+                                    class="w-9 h-9 rounded-full bg-green-50 text-green-600 hover:bg-green-500 hover:text-white transition shadow-sm border border-green-200"
+                                    title="Activar">
+                                    <i class="fas fa-check text-xs"></i>
+                                </button>
+                                <?php endif; ?>
+
+                                <!-- Eliminar -->
+                                <button type="button"
+                                    onclick="confirmarAccion('eliminar', <?= $u['id_usuario'] ?>, '<?= htmlspecialchars(addslashes($u['nombre'].' '.$u['apellidos'])) ?>')"
+                                    class="w-9 h-9 rounded-full bg-red-50 text-red-500 hover:bg-red-600 hover:text-white transition shadow-sm border border-red-200"
+                                    title="Eliminar">
+                                    <i class="fas fa-trash text-xs"></i>
+                                </button>
+                            </div>
                         </td>
                     </tr>
                     <?php endforeach; ?>
                     
                     <?php if (empty($usuarios)): ?>
                     <tr>
-                        <td colspan="5" class="p-8 text-center text-gray-500 font-body">No hay usuarios registrados.</td>
+                        <td colspan="6" class="p-8 text-center text-gray-500 font-body">No hay usuarios registrados.</td>
                     </tr>
                     <?php endif; ?>
                 </tbody>
@@ -257,6 +300,11 @@ require_once __DIR__ . '/../layouts/sidebar.php';
     </div>
 </div>
 
+<!-- Formulario oculto para acciones de estado/eliminar -->
+<form id="formAccion" method="POST" style="display:none;">
+    <input type="hidden" name="id_usuario" id="accion_id_usuario">
+</form>
+
 <script>
     function openModal(id) {
         document.getElementById(id).classList.remove('hidden');
@@ -273,6 +321,56 @@ require_once __DIR__ . '/../layouts/sidebar.php';
         document.getElementById('edit_email').value = usuario.email;
         document.getElementById('edit_id_rol').value = usuario.id_rol;
         openModal('modalEditar');
+    }
+
+    function confirmarAccion(accion, id, nombre) {
+        const cfg = {
+            deshabilitar: {
+                icon: 'warning',
+                title: '¿Deshabilitar usuario?',
+                text: `"${nombre}" no podrá iniciar sesión mientras esté inactivo.`,
+                confirmText: 'Deshabilitar',
+                confirmColor: '#D97706',
+            },
+            activar: {
+                icon: 'question',
+                title: '¿Activar usuario?',
+                text: `"${nombre}" podrá volver a iniciar sesión.`,
+                confirmText: 'Activar',
+                confirmColor: '#059669',
+            },
+            eliminar: {
+                icon: 'error',
+                title: '¿Eliminar usuario?',
+                text: `Esta acción es irreversible. Se eliminará a "${nombre}" permanentemente.`,
+                confirmText: 'Eliminar',
+                confirmColor: '#DC2626',
+            },
+        };
+
+        const c = cfg[accion];
+        Swal.fire({
+            icon: c.icon,
+            title: c.title,
+            text: c.text,
+            showCancelButton: true,
+            confirmButtonText: c.confirmText,
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: c.confirmColor,
+            cancelButtonColor: '#6B7280',
+            background: '#F7FAFC',
+            customClass: {
+                title: 'font-heading font-bold text-gray-800',
+                htmlContainer: 'font-body text-gray-600'
+            }
+        }).then(result => {
+            if (result.isConfirmed) {
+                const form = document.getElementById('formAccion');
+                form.action = `../../Controllers/AdminUsuarioController.php?accion=${accion}`;
+                document.getElementById('accion_id_usuario').value = id;
+                form.submit();
+            }
+        });
     }
 </script>
 

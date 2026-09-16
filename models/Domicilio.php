@@ -62,7 +62,8 @@ class Domicilio {
                 COALESCE(u.nombre, 'Sin cliente')       AS nombre_cliente,
                 COALESCE(u.apellidos, '')               AS apellidos_cliente,
                 COALESCE(u.telefono, '—')               AS telefono_cliente,
-                IFNULL(f.total_factura, 0)              AS total
+                IFNULL(f.total_factura, 0)              AS total,
+                p.direccion_entrega
             FROM pedido p
             JOIN tipo_pedido   tp ON p.id_tipo_pedido   = tp.id_tipo_pedido
             JOIN estado_pedido ep ON p.id_estado_pedido = ep.id_estado_pedido
@@ -111,8 +112,8 @@ class Domicilio {
             if (!$tp) throw new Exception("No existe tipo de pedido 'domicilio'");
 
             $stmt = $this->db->prepare("
-                INSERT INTO pedido (id_cliente, id_mesero, id_tipo_pedido, fecha_pedido, id_estado_pedido)
-                VALUES (:id_cliente, :id_mesero, :id_tipo_pedido, :fecha_pedido, :id_estado_pedido)
+                INSERT INTO pedido (id_cliente, id_mesero, id_tipo_pedido, fecha_pedido, id_estado_pedido, direccion_entrega)
+                VALUES (:id_cliente, :id_mesero, :id_tipo_pedido, :fecha_pedido, :id_estado_pedido, :direccion_entrega)
             ");
             $stmt->execute([
                 ':id_cliente'        => $datos['id_cliente'] ?: null,
@@ -120,6 +121,7 @@ class Domicilio {
                 ':id_tipo_pedido'    => $tp,
                 ':fecha_pedido'      => $datos['fecha_pedido'],
                 ':id_estado_pedido'  => $datos['id_estado_pedido'],
+                ':direccion_entrega' => $datos['direccion_entrega'] ?? null,
             ]);
             return true;
         } catch (Exception $e) { return $e->getMessage(); }

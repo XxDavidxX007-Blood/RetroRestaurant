@@ -55,6 +55,12 @@ $num = str_pad($pedido['id_pedido'], 5, '0', STR_PAD_LEFT);
                 <?= $b['label'] ?>
             </span>
         </div>
+        <?php if (!empty($pedido['direccion_entrega'])): ?>
+        <div class="bg-gray-50 rounded-xl p-4 col-span-2">
+            <p class="text-xs text-gray-400 mb-1">Dirección de entrega</p>
+            <p class="font-semibold text-gray-800"><?= htmlspecialchars($pedido['direccion_entrega']) ?></p>
+        </div>
+        <?php endif; ?>
     </div>
 
     <!-- Productos -->

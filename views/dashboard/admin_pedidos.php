@@ -53,7 +53,7 @@ $kpiIdx = 0;
     <?php endif; ?>
 
     <!-- KPI CARDS -->
-    <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4" id="kpiGrid">
 
         <!-- Pedidos hoy -->
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
@@ -63,8 +63,8 @@ $kpiIdx = 0;
             </div>
             <div>
                 <p class="text-xs text-gray-500 font-body">Pedidos hoy</p>
-                <p class="text-2xl font-heading font-bold text-gray-800"><?= $pedidosHoy ?></p>
-                <p class="text-xs <?= $varPedidos >= 0 ? 'text-green-600' : 'text-red-500' ?> font-body">
+                <p class="text-2xl font-heading font-bold text-gray-800" id="kpi-pedidosHoy"><?= $pedidosHoy ?></p>
+                <p class="text-xs <?= $varPedidos >= 0 ? 'text-green-600' : 'text-red-500' ?> font-body" id="kpi-varPedidos">
                     <?= $varPedidos >= 0 ? '+' : '' ?><?= $varPedidos ?>% que ayer
                 </p>
             </div>
@@ -83,6 +83,7 @@ $kpiIdx = 0;
         $kpiLabels = [
             'En preparación', 'Listos para entregar', 'Completados hoy', 'Cancelados hoy'
         ];
+        $kpiNombres = ['en_preparacion', 'listo', 'entregado', 'cancelado'];
         $kpiSubtitles = [
             'Pedidos activos', 'Listos para servir', 'Pedidos entregados', 'Pedidos cancelados'
         ];
@@ -94,6 +95,7 @@ $kpiIdx = 0;
             $icon  = $kpiIconos[$i];
             $label = $kpiLabels[$i];
             $sub   = $kpiSubtitles[$i];
+            $kpiNom = $kpiNombres[$i] ?? $nombre;
             $i++;
         ?>
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
@@ -103,7 +105,8 @@ $kpiIdx = 0;
             </div>
             <div>
                 <p class="text-xs text-gray-500 font-body"><?= htmlspecialchars($label) ?></p>
-                <p class="text-2xl font-heading font-bold text-gray-800"><?= $conteo ?></p>
+                <p class="text-2xl font-heading font-bold text-gray-800"
+                   id="kpi-<?= $kpiNom ?>"><?= $conteo ?></p>
                 <p class="text-xs text-gray-400 font-body"><?= $sub ?></p>
             </div>
         </div>
@@ -189,7 +192,7 @@ $kpiIdx = 0;
                         $esDelivery = stripos($p['tipo'], 'domicilio') !== false
                                    || stripos($p['tipo'], 'delivery')  !== false;
                     ?>
-                    <tr class="hover:bg-gray-50 transition">
+                    <tr class="hover:bg-gray-50 transition" data-pedido-id="<?= $p['id_pedido'] ?>">
 
                         <!-- Pedido -->
                         <td class="px-6 py-4">
@@ -208,18 +211,31 @@ $kpiIdx = 0;
                             <p class="text-sm text-gray-700"><?= htmlspecialchars($p['tipo']) ?></p>
                             <?php if ($esDelivery): ?>
                             <p class="text-xs font-semibold text-retro-red">Domicilio</p>
+                                <?php if (!empty($p['direccion_entrega'])): ?>
+                                <p class="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                                    <i class="fas fa-map-marker-alt text-gray-400"></i>
+                                    <?= htmlspecialchars($p['direccion_entrega']) ?>
+                                </p>
+                                <?php endif; ?>
                             <?php else: ?>
                             <p class="text-xs text-gray-400">Salón</p>
                             <?php endif; ?>
                         </td>
 
-                        <!-- Estado -->
+                        <!-- Estado (con clases para actualizacion SSE) -->
                         <td class="px-6 py-4">
-                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                            <span class="badge-estado inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all duration-500"
                                   style="background:<?= $b['bg'] ?>; color:<?= $b['color'] ?>;">
-                                <span class="w-1.5 h-1.5 rounded-full inline-block" style="background:<?= $b['dot'] ?>;"></span>
-                                <?= $b['label'] ?>
+                                <span class="badge-dot w-1.5 h-1.5 rounded-full inline-block" style="background:<?= $b['dot'] ?>;"></span>
+                                <span class="badge-label"><?= $b['label'] ?></span>
                             </span>
+                            <?php if (!empty($p['fecha_auto_eliminacion']) && in_array(strtolower($p['estado']), ['cancelado','entregado'])): ?>
+                            <p class="text-xs text-gray-400 mt-1 flex items-center gap-1"
+                               title="Se eliminará automáticamente 7 días hábiles después de su fecha de pedido">
+                                <i class="fas fa-clock text-xs"></i>
+                                Expira <?= date('d/m/Y', strtotime($p['fecha_auto_eliminacion'])) ?>
+                            </p>
+                            <?php endif; ?>
                         </td>
 
                         <!-- Total -->
@@ -319,18 +335,18 @@ $kpiIdx = 0;
                 <i class="fas fa-times"></i>
             </button>
         </div>
-        <form action="admin_pedidos.php" method="POST" class="p-6 space-y-4">
-            <input type="hidden" name="accion" value="cambiar_estado">
-            <input type="hidden" name="id_pedido" id="estado_id_pedido">
+        <div class="p-6 space-y-4">
+            <input type="hidden" id="estado_id_pedido">
 
             <p class="text-sm text-gray-500 font-body">Selecciona el nuevo estado para el pedido <strong id="estado_num_pedido"></strong>.</p>
 
             <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">Nuevo estado</label>
-                <select name="id_estado_pedido" id="estado_select"
+                <select id="estado_select"
                         class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-retro-red bg-white font-body text-sm">
                     <?php foreach ($estados as $e): ?>
-                    <option value="<?= $e['id_estado_pedido'] ?>">
+                    <option value="<?= $e['id_estado_pedido'] ?>"
+                            data-nombre="<?= htmlspecialchars($e['nombre_estado']) ?>">
                         <?= ucfirst(str_replace('_', ' ', $e['nombre_estado'])) ?>
                     </option>
                     <?php endforeach; ?>
@@ -342,17 +358,35 @@ $kpiIdx = 0;
                         class="px-5 py-2 text-gray-500 hover:bg-gray-100 rounded-xl font-body text-sm transition">
                     Cancelar
                 </button>
-                <button type="submit"
-                        class="px-5 py-2 bg-retro-red hover:bg-red-700 text-white rounded-xl font-heading text-sm shadow transition">
-                    Guardar
+                <button id="btnGuardarEstado" onclick="guardarEstadoAjax()"
+                        class="px-5 py-2 bg-retro-red hover:bg-red-700 text-white rounded-xl font-heading text-sm shadow transition flex items-center gap-2">
+                    <i class="fas fa-save"></i> Guardar
                 </button>
             </div>
-        </form>
+        </div>
     </div>
 </div>
 
+<!-- ── TOAST NOTIFICACIÓN ─────────────────────────────────────── -->
+<div id="toastAdmin" class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
+
 <script>
-// ── Helpers ──────────────────────────────────────────────────────
+// ── Mapa de badges (sincronizado con PedidoController::badgeEstado) ──────────
+const BADGE_MAP = {
+    pendiente:      { bg:'#FEF3C7', color:'#D97706', dot:'#F59E0B', label:'Pendiente' },
+    en_preparacion: { bg:'#DBEAFE', color:'#2563EB', dot:'#3B82F6', label:'En preparación' },
+    listo:          { bg:'#D1FAE5', color:'#059669', dot:'#10B981', label:'Listo' },
+    entregado:      { bg:'#EDE9FE', color:'#7C3AED', dot:'#8B5CF6', label:'Entregado' },
+    completado:     { bg:'#EDE9FE', color:'#7C3AED', dot:'#8B5CF6', label:'Completado' },
+    cancelado:      { bg:'#FEE2E2', color:'#DC2626', dot:'#EF4444', label:'Cancelado' },
+};
+const BADGE_DEFAULT = { bg:'#F3F4F6', color:'#6B7280', dot:'#9CA3AF', label:'Desconocido' };
+
+function getBadge(estado) {
+    return BADGE_MAP[estado.toLowerCase().replace(/ /g,'_')] || BADGE_DEFAULT;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function cerrarModal(id) {
     document.getElementById(id).classList.add('hidden');
 }
@@ -368,33 +402,127 @@ function aplicarFecha(val) {
     window.location.href = url.toString();
 }
 
-// ── Cambiar estado ────────────────────────────────────────────────
+// ── Toast de notificación ─────────────────────────────────────────────────────
+function mostrarToastAdmin(msg, tipo = 'success') {
+    const container = document.getElementById('toastAdmin');
+    const toast = document.createElement('div');
+    const colores = {
+        success: 'bg-green-600',
+        info:    'bg-blue-600',
+        warning: 'bg-yellow-500',
+    };
+    toast.className = `pointer-events-auto flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl text-white text-sm font-body
+                       ${ colores[tipo] || colores.success } translate-y-4 opacity-0 transition-all duration-300`;
+    toast.innerHTML = `<i class="fas fa-sync-alt fa-spin text-xs opacity-70"></i><span>${msg}</span>`;
+    container.appendChild(toast);
+    requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-4','opacity-0');
+    });
+    setTimeout(() => {
+        toast.classList.add('opacity-0','translate-y-4');
+        setTimeout(() => toast.remove(), 350);
+    }, 3500);
+}
+
+// ── Actualizar badge en tabla ─────────────────────────────────────────────────
+function actualizarBadgeTabla(idPedido, estado) {
+    const row = document.querySelector(`tr[data-pedido-id="${idPedido}"]`);
+    if (!row) return;
+    const badgeEl = row.querySelector('.badge-estado');
+    if (!badgeEl) return;
+    const b = getBadge(estado);
+    badgeEl.style.background = b.bg;
+    badgeEl.style.color      = b.color;
+    const dot = badgeEl.querySelector('.badge-dot');
+    if (dot) dot.style.background = b.dot;
+    const lbl = badgeEl.querySelector('.badge-label');
+    if (lbl) lbl.textContent = b.label;
+    // Animación de pulso
+    row.classList.add('bg-blue-50');
+    setTimeout(() => row.classList.remove('bg-blue-50'), 1500);
+}
+
+// ── Actualizar KPIs ───────────────────────────────────────────────────────────
+function actualizarKPIs(data) {
+    if (data.pedidosHoy !== undefined) {
+        const el = document.getElementById('kpi-pedidosHoy');
+        if (el) el.textContent = data.pedidosHoy;
+    }
+    if (data.estados) {
+        for (const [nombre, conteo] of Object.entries(data.estados)) {
+            const el = document.getElementById('kpi-' + nombre);
+            if (el) {
+                const prev = parseInt(el.textContent);
+                el.textContent = conteo;
+                if (conteo !== prev) {
+                    el.classList.add('text-blue-600');
+                    setTimeout(() => el.classList.remove('text-blue-600'), 1200);
+                }
+            }
+        }
+    }
+}
+
+// ── Cambiar estado (AJAX sin recarga) ─────────────────────────────────────────
 function abrirCambiarEstado(id, estadoActual) {
     document.getElementById('estado_id_pedido').value = id;
     document.getElementById('estado_num_pedido').textContent = '#ORD-' + String(id).padStart(5, '0');
-
-    // Seleccionar el estado actual en el select
     const sel = document.getElementById('estado_select');
     for (let i = 0; i < sel.options.length; i++) {
-        if (sel.options[i].text.toLowerCase().replace(/ /g,'_') === estadoActual.toLowerCase()) {
-            sel.selectedIndex = i;
-            break;
-        }
+        const n = sel.options[i].dataset.nombre || '';
+        if (n === estadoActual.toLowerCase()) { sel.selectedIndex = i; break; }
     }
-
     document.getElementById('modalEstado').classList.remove('hidden');
 }
 
-// ── Ver detalle ───────────────────────────────────────────────────
-function abrirDetalle(id) {
-    const modal    = document.getElementById('modalDetalle');
-    const titulo   = document.getElementById('detalleTitulo');
-    const contenido = document.getElementById('detalleContenido');
+async function guardarEstadoAjax() {
+    const idPedido   = document.getElementById('estado_id_pedido').value;
+    const sel        = document.getElementById('estado_select');
+    const idEstado   = sel.value;
+    const nomEstado  = sel.options[sel.selectedIndex].dataset.nombre;
+    const btn        = document.getElementById('btnGuardarEstado');
 
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+    const fd = new FormData();
+    fd.append('accion', 'cambiar_estado');
+    fd.append('id_pedido', idPedido);
+    fd.append('id_estado_pedido', idEstado);
+    fd.append('ajax', '1');
+
+    try {
+        const res  = await fetch('admin_pedidos.php', { method:'POST', body:fd });
+        const data = await res.json();
+
+        if (data.ok) {
+            cerrarModal('modalEstado');
+            actualizarBadgeTabla(idPedido, nomEstado);
+            mostrarToastAdmin(`Pedido #ORD-${String(idPedido).padStart(5,'0')} → ${sel.options[sel.selectedIndex].text}`, 'success');
+            // Refrescar KPIs
+            fetch('../../Controllers/PedidoEstadoAPI.php?kpis=1')
+                .then(r => r.json())
+                .then(actualizarKPIs)
+                .catch(() => {});
+        } else {
+            mostrarToastAdmin('Error al guardar el estado', 'warning');
+        }
+    } catch(e) {
+        mostrarToastAdmin('Error de conexión', 'warning');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Guardar';
+    }
+}
+
+// ── Ver detalle ───────────────────────────────────────────────────────────────
+function abrirDetalle(id) {
+    const modal     = document.getElementById('modalDetalle');
+    const titulo    = document.getElementById('detalleTitulo');
+    const contenido = document.getElementById('detalleContenido');
     titulo.textContent = '#ORD-' + String(id).padStart(5, '0');
     contenido.innerHTML = '<div class="flex items-center justify-center py-12 text-gray-400"><i class="fas fa-spinner fa-spin text-3xl"></i></div>';
     modal.classList.remove('hidden');
-
     fetch('admin_pedidos_detalle.php?id=' + id)
         .then(r => r.text())
         .then(html => { contenido.innerHTML = html; })
@@ -403,13 +531,58 @@ function abrirDetalle(id) {
         });
 }
 
-// Cerrar modales al hacer click fuera
+// Cerrar modales al click fuera
 document.addEventListener('click', function(e) {
-    ['modalDetalle', 'modalEstado'].forEach(id => {
+    ['modalDetalle','modalEstado'].forEach(id => {
         const modal = document.getElementById(id);
         if (e.target === modal) modal.classList.add('hidden');
     });
 });
+
+// ── SSE — Escuchar cambios en tiempo real ─────────────────────────────────────
+(function iniciarSSEAdmin() {
+    if (!window.EventSource) return; // Navegador sin soporte SSE
+
+    const url = `../../Controllers/PedidoSSE.php?modo=admin&desde=${Math.floor(Date.now()/1000)}`;
+    let es    = null;
+    let reconectando = false;
+
+    function conectar() {
+        es = new EventSource(url);
+
+        es.addEventListener('pedido_actualizado', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.cambios && data.cambios.length > 0) {
+                    data.cambios.forEach(c => {
+                        actualizarBadgeTabla(c.id_pedido, c.estado);
+                    });
+                    if (data.kpis) actualizarKPIs(data.kpis);
+                    const ords = data.cambios.map(c => '#ORD-' + String(c.id_pedido).padStart(5,'0')).join(', ');
+                    mostrarToastAdmin(`🔄 Actualizado: ${ords}`, 'info');
+                }
+            } catch(err) { /* ignorar errores de parse */ }
+        });
+
+        es.addEventListener('reconnect', function() {
+            es.close();
+            setTimeout(conectar, 1000);
+        });
+
+        es.onerror = function() {
+            es.close();
+            if (!reconectando) {
+                reconectando = true;
+                setTimeout(() => { reconectando = false; conectar(); }, 5000);
+            }
+        };
+    }
+
+    conectar();
+
+    // Limpiar al salir
+    window.addEventListener('beforeunload', () => { if (es) es.close(); });
+}());
 </script>
 
 <?php require_once __DIR__ . '/../layouts/footer.php'; ?>

@@ -36,15 +36,16 @@ if ($id_cliente) {
     $stmtP = $db->prepare("
         SELECT p.id_pedido, p.fecha_pedido,
                ep.nombre_estado AS estado,
-               IFNULL(f.total_factura, 0) AS total,
-               COUNT(dp.id_detalle) AS num_productos
+               IFNULL(MAX(f.total_factura), 0) AS total,
+               COUNT(dp.id_detalle) AS num_productos,
+               p.direccion_entrega
         FROM pedido p
         JOIN tipo_pedido   tp ON p.id_tipo_pedido   = tp.id_tipo_pedido
         JOIN estado_pedido ep ON p.id_estado_pedido = ep.id_estado_pedido
         LEFT JOIN factura  f  ON f.id_pedido        = p.id_pedido
         LEFT JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
         WHERE {$where}
-        GROUP BY p.id_pedido
+        GROUP BY p.id_pedido, p.fecha_pedido, ep.nombre_estado, p.direccion_entrega
         ORDER BY p.id_pedido DESC
     ");
     $stmtP->execute($params);
@@ -134,6 +135,12 @@ require_once __DIR__ . '/../layouts/sidebar.php';
                     <p class="font-bold text-gray-800">Pedido #<?= $num ?></p>
                     <p class="text-xs text-gray-500 mt-0.5"><?= $fecha ?></p>
                     <p class="text-xs text-gray-400 mt-0.5"><?= $nProd ?> <?= $nProd === 1 ? 'producto' : 'productos' ?></p>
+                    <?php if (!empty($p['direccion_entrega'])): ?>
+                    <p class="text-xs text-gray-600 mt-1 flex items-center gap-1 font-body">
+                        <i class="fas fa-map-marker-alt text-retro-red text-xs"></i>
+                        <span class="font-semibold text-gray-500">Dirección:</span> <?= htmlspecialchars($p['direccion_entrega']) ?>
+                    </p>
+                    <?php endif; ?>
                 </div>
 
                 <!-- Estado -->

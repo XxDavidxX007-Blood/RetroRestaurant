@@ -106,6 +106,52 @@ class AdminUsuarioController {
         exit;
     }
 
+    public function deshabilitar() {
+        $id = (int)($_POST['id_usuario'] ?? 0);
+        if (!$id) {
+            $this->setAlert('error', 'Error', 'ID de usuario no proporcionado');
+            header("Location: {$this->base}/views/dashboard/admin.php"); exit;
+        }
+        // Proteger al propio admin
+        if ($id === (int)$_SESSION['usuario']['id_usuario']) {
+            $this->setAlert('warning', 'Acción no permitida', 'No puedes deshabilitar tu propia cuenta');
+            header("Location: {$this->base}/views/dashboard/admin.php"); exit;
+        }
+        $r = $this->usuarioModel->deshabilitar($id);
+        if ($r === true) $this->setAlert('success', 'Listo', 'Usuario deshabilitado correctamente');
+        else             $this->setAlert('error', 'Error', is_string($r) ? $r : 'Error al deshabilitar');
+        header("Location: {$this->base}/views/dashboard/admin.php"); exit;
+    }
+
+    public function activar() {
+        $id = (int)($_POST['id_usuario'] ?? 0);
+        if (!$id) {
+            $this->setAlert('error', 'Error', 'ID de usuario no proporcionado');
+            header("Location: {$this->base}/views/dashboard/admin.php"); exit;
+        }
+        $r = $this->usuarioModel->activar($id);
+        if ($r === true) $this->setAlert('success', 'Listo', 'Usuario activado correctamente');
+        else             $this->setAlert('error', 'Error', is_string($r) ? $r : 'Error al activar');
+        header("Location: {$this->base}/views/dashboard/admin.php"); exit;
+    }
+
+    public function eliminar() {
+        $id = (int)($_POST['id_usuario'] ?? 0);
+        if (!$id) {
+            $this->setAlert('error', 'Error', 'ID de usuario no proporcionado');
+            header("Location: {$this->base}/views/dashboard/admin.php"); exit;
+        }
+        // Proteger al propio admin
+        if ($id === (int)$_SESSION['usuario']['id_usuario']) {
+            $this->setAlert('warning', 'Acción no permitida', 'No puedes eliminar tu propia cuenta');
+            header("Location: {$this->base}/views/dashboard/admin.php"); exit;
+        }
+        $r = $this->usuarioModel->eliminar($id);
+        if ($r === true) $this->setAlert('success', 'Eliminado', 'Usuario eliminado correctamente');
+        else             $this->setAlert('error', 'Error', is_string($r) ? $r : 'Error al eliminar');
+        header("Location: {$this->base}/views/dashboard/admin.php"); exit;
+    }
+
     private function setAlert($icon, $title, $text) {
         $_SESSION['alert'] = [
             'icon'  => $icon,
@@ -125,6 +171,18 @@ switch ($accion) {
 
     case 'editar':
         $controller->editar();
+        break;
+
+    case 'deshabilitar':
+        $controller->deshabilitar();
+        break;
+
+    case 'activar':
+        $controller->activar();
+        break;
+
+    case 'eliminar':
+        $controller->eliminar();
         break;
 
     default:

@@ -27,14 +27,27 @@ class PedidoController {
         if ($this->dbError) return;
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
 
-        $accion = $_POST['accion'] ?? '';
+        $accion  = $_POST['accion'] ?? '';
+        $esAjax  = !empty($_POST['ajax']) || !empty($_GET['ajax']);
 
         if ($accion === 'cambiar_estado') {
             $id_pedido        = (int)($_POST['id_pedido'] ?? 0);
             $id_estado_pedido = (int)($_POST['id_estado_pedido'] ?? 0);
 
             if ($id_pedido && $id_estado_pedido) {
-                $this->model->cambiarEstado($id_pedido, $id_estado_pedido);
+                $ok = $this->model->cambiarEstado($id_pedido, $id_estado_pedido);
+                // Sincronizar fecha de eliminación si el nuevo estado es entregado/cancelado
+                if ($ok) {
+                    $this->model->sincronizarFechasEliminacion();
+                }
+            } else {
+                $ok = false;
+            }
+
+            if ($esAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['ok' => (bool)$ok]);
+                exit;
             }
 
             header("Location: " . $this->baseUrl() . "/admin_pedidos.php?success=estado_actualizado");
@@ -46,6 +59,11 @@ class PedidoController {
         if ($this->dbError) {
             return ['pedidos'=>[],'estados'=>[],'kpiEstados'=>[],'pedidosHoy'=>0,'varPedidos'=>0,'filtro_estado'=>'todos','filtro_fecha'=>'','pagina'=>1,'totalPaginas'=>1,'total'=>0,'por_pagina'=>10];
         }
+
+        // Limpieza automática y sincronización de fechas al cargar la vista
+        $this->model->sincronizarFechasEliminacion();
+        $this->model->ejecutarLimpiezaAutomatica();
+
         $filtro_estado = $_GET['estado'] ?? 'todos';
         $filtro_fecha  = $_GET['fecha']  ?? '';
         $pagina        = max(1, (int)($_GET['pagina'] ?? 1));

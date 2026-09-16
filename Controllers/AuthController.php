@@ -87,6 +87,17 @@ class AuthController {
             exit;
         }
 
+        // Verificar si la cuenta está habilitada
+        if (isset($usuario['activo']) && $usuario['activo'] == 0) {
+            $_SESSION['alert'] = [
+                'icon'  => 'error', 
+                'title' => 'Cuenta deshabilitada',
+                'text'  => 'Tu cuenta ha sido deshabilitada. Contacta al administrador.'
+            ];
+            header("Location: {$base}/views/usuarios/login.php");
+            exit;
+        }
+
         session_regenerate_id(true);
 
         $_SESSION['usuario'] = [
@@ -100,7 +111,6 @@ class AuthController {
         ];
 
         $rol = (string) $usuario['id_rol'];
-
         switch ($rol) {
             case '1':
             case 'administrador':

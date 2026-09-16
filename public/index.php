@@ -101,11 +101,15 @@ error_reporting(E_ALL);
     <!-- Navigation -->
     <nav class="bg-retro-light/95 backdrop-blur-md shadow-sm sticky top-0 z-50 border-b border-gray-100 transition-all duration-300">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-24 items-center">
-                <div class="flex items-center gap-3">
-                    <i class="fas fa-wine-glass text-retro-gold text-3xl"></i>
-                    <span class="font-heading text-3xl text-retro-dark tracking-wide font-semibold">Retro Restaurant</span>
+            <div class="flex justify-between h-16 md:h-24 items-center">
+
+                <!-- Logo -->
+                <div class="flex items-center gap-2 md:gap-3">
+                    <i class="fas fa-wine-glass text-retro-gold text-2xl md:text-3xl"></i>
+                    <span class="font-heading text-xl md:text-3xl text-retro-dark tracking-wide font-semibold">Retro Restaurant</span>
                 </div>
+
+                <!-- Desktop links -->
                 <div class="hidden md:flex space-x-10 font-body text-sm tracking-widest uppercase items-center">
                     <a href="#inicio" class="text-gray-600 hover:text-retro-gold transition duration-300">Inicio</a>
                     <a href="#menu" class="text-gray-600 hover:text-retro-gold transition duration-300">Menú</a>
@@ -113,6 +117,51 @@ error_reporting(E_ALL);
                     <a href="../views/usuarios/login.php"
                         class="btn-gold-outline px-8 py-3 font-medium hover:shadow-lg transition duration-300">
                         Reservaciones
+                    </a>
+                </div>
+
+                <!-- Mobile: botones de acción + hamburguesa -->
+                <div class="flex md:hidden items-center gap-2">
+                    <a href="../views/usuarios/registre.php"
+                       class="text-xs font-body font-semibold tracking-wider uppercase text-retro-dark border border-gray-300 px-3 py-2 rounded hover:border-retro-gold hover:text-retro-gold transition duration-200">
+                        Registrarse
+                    </a>
+                    <a href="../views/usuarios/login.php"
+                       class="text-xs font-body font-semibold tracking-wider uppercase bg-retro-gold text-white px-3 py-2 rounded hover:bg-retro-goldlight transition duration-200">
+                        Reservar
+                    </a>
+                    <button id="menu-toggle" onclick="toggleMobileMenu()"
+                            class="w-9 h-9 flex items-center justify-center text-gray-600 hover:text-retro-gold transition ml-1">
+                        <i id="menu-icon" class="fas fa-bars text-lg"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile dropdown menu -->
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-gray-100 shadow-md">
+            <div class="px-5 py-4 flex flex-col gap-1 font-body text-sm tracking-widest uppercase">
+                <a href="#inicio" onclick="closeMobileMenu()"
+                   class="py-3 px-2 text-gray-600 hover:text-retro-gold border-b border-gray-50 transition">
+                    <i class="fas fa-home text-retro-gold mr-2 text-xs"></i> Inicio
+                </a>
+                <a href="#menu" onclick="closeMobileMenu()"
+                   class="py-3 px-2 text-gray-600 hover:text-retro-gold border-b border-gray-50 transition">
+                    <i class="fas fa-utensils text-retro-gold mr-2 text-xs"></i> Menú
+                </a>
+                <a href="#nosotros" onclick="closeMobileMenu()"
+                   class="py-3 px-2 text-gray-600 hover:text-retro-gold border-b border-gray-50 transition">
+                    <i class="fas fa-star text-retro-gold mr-2 text-xs"></i> Experiencia
+                </a>
+                <div class="pt-3 pb-1 flex flex-col gap-3">
+                    <a href="../views/usuarios/login.php"
+                       class="text-center py-3 font-semibold text-white tracking-widest uppercase text-xs transition"
+                       style="background:#c5a059;">
+                        <i class="fas fa-calendar-check mr-2"></i> Reservaciones
+                    </a>
+                    <a href="../views/usuarios/registre.php"
+                       class="text-center py-3 font-semibold text-retro-dark border border-gray-300 tracking-widest uppercase text-xs hover:border-retro-gold hover:text-retro-gold transition">
+                        <i class="fas fa-user-plus mr-2"></i> Crear cuenta
                     </a>
                 </div>
             </div>
@@ -285,13 +334,31 @@ error_reporting(E_ALL);
     </footer>
 
     <script>
-        // Fade out antes de navegar a páginas externas (Reservaciones, Reservar Mesa, etc.)
+        // ── Menú móvil ────────────────────────────────────────────────
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            const icon = document.getElementById('menu-icon');
+            const open = menu.classList.toggle('hidden');
+            icon.className = open ? 'fas fa-bars text-lg' : 'fas fa-times text-lg';
+        }
+
+        function closeMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            const icon = document.getElementById('menu-icon');
+            menu.classList.add('hidden');
+            icon.className = 'fas fa-bars text-lg';
+        }
+
+        // Cerrar menú al hacer scroll
+        window.addEventListener('scroll', closeMobileMenu, { passive: true });
+        
+        // ── Fade out antes de navegar ─────────────────────────────────
         document.querySelectorAll('a[href]').forEach(function(link) {
             const href = link.getAttribute('href');
-            // Solo aplica a links que van a otra página, no a anclas internas (#)
             if (href && !href.startsWith('#') && !href.startsWith('javascript')) {
                 link.addEventListener('click', function(e) {
                     e.preventDefault();
+                    closeMobileMenu();
                     document.body.classList.add('fade-out');
                     setTimeout(function() {
                         window.location.href = href;

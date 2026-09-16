@@ -2,10 +2,11 @@
 
 class Database
 {
-    private $host = "sql306.byethost24.com";
-    private $db_name = "b24_41909782_retrorestaurant";
-    private $username = "b24_41909782";
-    private $contraseña = "1597531208";
+    private $host = "127.0.0.1";
+    private $db_name = "retrorestaurant";
+    private $port = "3320";
+    private $username = "root";
+    private $contraseña = "";
 
     public $conn;
 
@@ -15,7 +16,7 @@ class Database
 
         try {
 
-            $dsn = "mysql:host={$this->host};dbname={$this->db_name};charset=utf8mb4";
+            $dsn = "mysql:host={$this->host};port={$this->port};dbname={$this->db_name};charset=utf8mb4";
 
             $this->conn = new PDO(
                 $dsn,

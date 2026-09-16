@@ -30,11 +30,11 @@ class PerfilController {
         $id = (int)($_SESSION['usuario']['id_usuario'] ?? 0);
         if (!$id) return;
 
-        $nombre    = trim($_POST['nombre']    ?? '');
-        $apellidos = trim($_POST['apellidos'] ?? '');
-        $telefono  = trim($_POST['telefono']  ?? '');
-        $password  = trim($_POST['password']  ?? '');
-        $confirmar = trim($_POST['confirmar'] ?? '');
+        $nombre = trim ($_POST ['nombre'] ?? '');
+        $apellidos = trim ($_POST ['apellidos'] ?? '');
+        $telefono = trim ($_POST ['telefono'] ?? '');
+        $password = trim ($_POST ['password'] ?? '');
+        $confirmar = trim ($_POST ['confirmar'] ?? '');
 
         if (empty($nombre) || empty($apellidos)) {
             $_SESSION['perfil_error'] = 'Nombre y apellidos son obligatorios.';
